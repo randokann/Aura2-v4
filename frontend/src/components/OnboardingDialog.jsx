@@ -18,29 +18,66 @@ export const OnboardingDialog = ({ onSubmit }) => {
         activity_level: "moderato",
         goal: "mantenere",
     });
+    const [accountMethod, setAccountMethod] = useState(null); // 'google' | 'email' | null
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailValue, setEmailValue] = useState("");
+    const PENDING_ONBOARDING_KEY = "pending_onboarding_form_v1";
 
     const update = (k, v) => setForm((s) => ({ ...s, [k]: v }));
     const next = () => setStep((s) => s + 1);
     const back = () => setStep((s) => Math.max(0, s - 1));
 
-    const handleGoogle = async () => {
+    const startGoogleAuth = async () => {
         try {
-            // Try to use popup auth to keep Aura2 visible. Supabase JS v2 exposes a
-            // signInWithOAuth method which supports redirect; popup support is limited
-            // (there's no signInWithPopup helper in v2). We'll use signInWithOAuth
-            // with the `redirectTo` option if you want a specific redirect, otherwise
-            // this will follow your project's default. Popup mode generally requires
-            // additional SDK/provider support, so we'll stick with the existing call
-            // to remain compatible.
+            // Persist pending form so App.finishOnboarding can pick it up on redirect
+            try {
+                localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(form));
+            } catch (e) {
+                console.warn("Failed to persist pending onboarding form:", e);
+            }
             await supabase.auth.signInWithOAuth({ provider: "google" });
         } catch (e) {
             console.error("Google sign-in failed:", e);
         }
     };
 
-    const handleEmail = () => {
-        // Placeholder navigation for email sign-up. Implement actual email flow later.
-        console.log("Email signup placeholder");
+    const openEmailPlaceholder = () => {
+        // Persist pending form so we have it available when the user completes email signup later
+        try {
+            localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(form));
+        } catch (e) {
+            console.warn("Failed to persist pending onboarding form:", e);
+        }
+        setShowEmailModal(true);
+    };
+
+    const selectAccount = (method) => {
+        setAccountMethod(method);
+        if (method === "google") {
+            // show selection briefly then start auth which will redirect
+            setTimeout(() => {
+                // Use the centralized flow: persist form and trigger Supabase OAuth
+                startGoogleAuth();
+            }, 170);
+        } else if (method === "email") {
+            setTimeout(() => {
+                openEmailPlaceholder();
+            }, 170);
+        }
+    };
+
+    const submitEmailPlaceholder = () => {
+        // In a real flow we'd call supabase.auth.signInWithOtp({ email: emailValue }) or similar.
+        // For now just show a simple success and close modal.
+        try {
+            // persist the email alongside pending form (optional)
+            localStorage.setItem("pending_onboarding_email_v1", emailValue);
+        } catch (e) {
+            console.warn("Failed to persist pending email:", e);
+        }
+        setShowEmailModal(false);
+        // Optionally navigate to another UI state: keep it simple and show a small toast in future.
+        console.log("Email signup placeholder: would send magic link to", emailValue);
     };
 
     const steps = [
@@ -183,7 +220,60 @@ export const OnboardingDialog = ({ onSubmit }) => {
                     <div className="text-sm text-[color:var(--text-secondary)]">
                         {"Create an Aura account to keep your data safe and available across devices. You can sign up with Google or use Email to create credentials."}
                     </div>
-                    {/* Optionally add more explanatory bullets here while preserving spacing and style */}
+                    {/* Selectable option cards matching Activity/Goal style */}
+                    <div className="space-y-2 mt-2">
+                        <button
+                            data-testid="onb-google"
+                            onClick={() => selectAccount('google')}
+                            className={`btn-tactile text-left px-4 py-3 rounded-2xl border w-full ${
+                                accountMethod === 'google'
+                                    ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)] border-transparent"
+                                    : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-primary)]"
+                            }`}
+                        >
+                            <div className="font-medium">Continue with Google</div>
+                            <div className={`text-xs ${accountMethod === 'google' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
+                                Use your Google account to sync across devices.
+                            </div>
+                        </button>
+
+                        <button
+                            data-testid="onb-email"
+                            onClick={() => selectAccount('email')}
+                            className={`btn-tactile text-left px-4 py-3 rounded-2xl border w-full ${
+                                accountMethod === 'email'
+                                    ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)] border-transparent"
+                                    : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-primary)]"
+                            }`}
+                        >
+                            <div className="font-medium">Continue with Email</div>
+                            <div className={`text-xs ${accountMethod === 'email' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
+                                Create credentials and receive a magic link.
+                            </div>
+                        </button>
+                    </div>
+
+                    {/* Email placeholder modal */}
+                    {showEmailModal && (
+                        <div className="fixed inset-0 z-60 flex items-center justify-center px-4">
+                            <div className="absolute inset-0 bg-black/50" onClick={() => setShowEmailModal(false)} />
+                            <div className="relative max-w-md w-full bg-[color:var(--bg-default)] rounded-2xl p-6 border border-white/5">
+                                <h2 className="font-display text-2xl mb-2">Sign up with Email</h2>
+                                <p className="text-sm text-[color:var(--text-secondary)] mb-4">Enter your email and we'll send a magic link (placeholder).</p>
+                                <input
+                                    type="email"
+                                    value={emailValue}
+                                    onChange={(e) => setEmailValue(e.target.value)}
+                                    placeholder="you@example.com"
+                                    className="w-full bg-[color:var(--bg-elevated)] rounded-2xl px-4 py-3 outline-none mb-4"
+                                />
+                                <div className="flex gap-3">
+                                    <button className="flex-1 btn-tactile py-3 rounded-2xl bg-[color:var(--action-primary)] text-[color:var(--bg-default)]" onClick={submitEmailPlaceholder}>Continue</button>
+                                    <button className="flex-1 btn-tactile py-3 rounded-2xl bg-[color:var(--bg-elevated)]" onClick={() => setShowEmailModal(false)}>Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             ),
         },
@@ -233,23 +323,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
                             </button>
                         )}
 
-                        <div className="space-y-3">
-                            <button
-                                data-testid="onb-google"
-                                onClick={handleGoogle}
-                                className="btn-tactile w-full py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2"
-                            >
-                                Continue with Google
-                            </button>
-
-                            <button
-                                data-testid="onb-email"
-                                onClick={handleEmail}
-                                className="btn-tactile w-full py-4 rounded-full bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)] font-semibold"
-                            >
-                                Continue with Email
-                            </button>
-                        </div>
+                        {/* Note: selectable options above are the primary actions for the final step */}
                     </div>
                 ) : (
                     <div className="flex gap-3 mt-8">
