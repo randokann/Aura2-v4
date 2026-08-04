@@ -52,18 +52,8 @@ export const OnboardingDialog = ({ onSubmit }) => {
     };
 
     const selectAccount = (method) => {
+        // Only update visual selection. Do not start auth here.
         setAccountMethod(method);
-        if (method === "google") {
-            // show selection briefly then start auth which will redirect
-            setTimeout(() => {
-                // Use the centralized flow: persist form and trigger Supabase OAuth
-                startGoogleAuth();
-            }, 170);
-        } else if (method === "email") {
-            setTimeout(() => {
-                openEmailPlaceholder();
-            }, 170);
-        }
     };
 
     const submitEmailPlaceholder = () => {
@@ -299,7 +289,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
                 <div className="flex-1">{current.body}</div>
 
                 {/* Progress indicator moved to bottom of the step, immediately above action buttons */}
-                <div className="flex gap-1 mb-10">
+                <div className="flex gap-1 mb-16">
                     {steps.map((s, i) => (
                     <div
                         key={s.title}
@@ -323,7 +313,28 @@ export const OnboardingDialog = ({ onSubmit }) => {
                             </button>
                         )}
 
-                        {/* Note: selectable options above are the primary actions for the final step */}
+                        {/* Continue button below selectable options */}
+                        <div>
+                            <button
+                                data-testid="onb-continue"
+                                onClick={() => {
+                                    if (!accountMethod) return;
+                                    if (accountMethod === 'google') {
+                                        // Use centralized onSubmit so App handles persisting and sign-in flow
+                                        onSubmit?.(form);
+                                    } else if (accountMethod === 'email') {
+                                        openEmailPlaceholder();
+                                    }
+                                }}
+                                disabled={!accountMethod}
+                                className={`btn-tactile w-full py-4 rounded-full font-semibold flex items-center justify-center gap-2 ${
+                                    accountMethod ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)]" : "bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
+                                }`}
+                            >
+                                {t("common.continue")}
+                                <ArrowRight size={18} />
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <div className="flex gap-3 mt-8">
