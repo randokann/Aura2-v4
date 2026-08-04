@@ -3,6 +3,7 @@ import { Sparkles, ArrowRight, Languages } from "lucide-react";
 import { useLang } from "../i18n/LangContext";
 import { LANGUAGES } from "../i18n/languages";
 import { sectionStyle } from "../lib/sectionColors";
+import { supabase } from "../lib/supabase";
 
 export const OnboardingDialog = ({ onSubmit }) => {
     const { t, lang, setLang } = useLang();
@@ -21,6 +22,26 @@ export const OnboardingDialog = ({ onSubmit }) => {
     const update = (k, v) => setForm((s) => ({ ...s, [k]: v }));
     const next = () => setStep((s) => s + 1);
     const back = () => setStep((s) => Math.max(0, s - 1));
+
+    const handleGoogle = async () => {
+        try {
+            // Try to use popup auth to keep Aura2 visible. Supabase JS v2 exposes a
+            // signInWithOAuth method which supports redirect; popup support is limited
+            // (there's no signInWithPopup helper in v2). We'll use signInWithOAuth
+            // with the `redirectTo` option if you want a specific redirect, otherwise
+            // this will follow your project's default. Popup mode generally requires
+            // additional SDK/provider support, so we'll stick with the existing call
+            // to remain compatible.
+            await supabase.auth.signInWithOAuth({ provider: "google" });
+        } catch (e) {
+            console.error("Google sign-in failed:", e);
+        }
+    };
+
+    const handleEmail = () => {
+        // Placeholder navigation for email sign-up. Implement actual email flow later.
+        console.log("Email signup placeholder");
+    };
 
     const steps = [
         {
@@ -152,6 +173,20 @@ export const OnboardingDialog = ({ onSubmit }) => {
                 </div>
             ),
         },
+        // New final step: Create your free Aura account
+        {
+            title: "Create your free Aura account",
+            subtitle: "Sync your workouts, meals and AI coach across all your devices.",
+            colorSection: "profilo",
+            body: (
+                <div className="space-y-4">
+                    <div className="text-sm text-[color:var(--text-secondary)]">
+                        {"Create an Aura account to keep your data safe and available across devices. You can sign up with Google or use Email to create credentials."}
+                    </div>
+                    {/* Optionally add more explanatory bullets here while preserving spacing and style */}
+                </div>
+            ),
+        },
     ];
 
     const current = steps[step];
@@ -174,68 +209,72 @@ export const OnboardingDialog = ({ onSubmit }) => {
                 <div className="flex-1">{current.body}</div>
 
                 {/* Progress indicator moved to bottom of the step, immediately above action buttons */}
-                <ProgressIndicator steps={steps} step={step} />
-
-                <div className="flex gap-3 mt-8">
-                    {step > 0 && (
-                        <button
-                            data-testid="onb-back"
-                            onClick={back}
-                            className="btn-tactile flex-1 py-4 rounded-full bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
-                        >
-                            {t("common.back")}
-                        </button>
-                    )}
-                    <button
-                        data-testid={isLast ? "onb-finish" : "onb-next"}
-                        onClick={() => (isLast ? onSubmit(form) : next())}
-                        className="btn-tactile flex-1 py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2"
-                    >
-                        {isLast ? t("common.finish") : t("common.continue")}
-                        <ArrowRight size={18} />
-                    </button>
+                <div className="flex gap-1 mb-10">
+                    {steps.map((s, i) => (
+                    <div
+                        key={s.title}
+                        className={`h-1 flex-1 rounded-full transition-colors ${
+                            i <= step ? "bg-[color:var(--action-primary)]" : "bg-[color:var(--ring-track)]"
+                        }`}
+                    />
+                ))}
                 </div>
+
+                {/* Actions */}
+                {isLast ? (
+                    <div className="mt-2 w-full">
+                        {step > 0 && (
+                            <button
+                                data-testid="onb-back"
+                                onClick={back}
+                                className="btn-tactile w-full mb-3 py-4 rounded-full bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
+                            >
+                                {t("common.back")}
+                            </button>
+                        )}
+
+                        <div className="space-y-3">
+                            <button
+                                data-testid="onb-google"
+                                onClick={handleGoogle}
+                                className="btn-tactile w-full py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2"
+                            >
+                                Continue with Google
+                            </button>
+
+                            <button
+                                data-testid="onb-email"
+                                onClick={handleEmail}
+                                className="btn-tactile w-full py-4 rounded-full bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)] font-semibold"
+                            >
+                                Continue with Email
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex gap-3 mt-8">
+                        {step > 0 && (
+                            <button
+                                data-testid="onb-back"
+                                onClick={back}
+                                className="btn-tactile flex-1 py-4 rounded-full bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
+                            >
+                                {t("common.back")}
+                            </button>
+                        )}
+                        <button
+                            data-testid={isLast ? "onb-finish" : "onb-next"}
+                            onClick={() => (isLast ? onSubmit(form) : next())}
+                            className="btn-tactile flex-1 py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2"
+                        >
+                            {isLast ? t("common.finish") : t("common.continue")}
+                            <ArrowRight size={18} />
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
-const ProgressIndicator = ({ steps, step }) => (
-    <div className="flex gap-1 mb-8">
-        {steps.map((s, i) => (
-            <div
-                key={s.title}
-                className={`h-1 flex-1 rounded-full transition-colors ${
-                    i <= step ? "bg-[color:var(--action-primary)]" : "bg-[color:var(--ring-track)]"
-                }`}
-            />
-        ))}
-    </div>
-);
-
-const Field = ({ label, children }) => (
-    <div>
-        <label className="block text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] mb-2">
-            {label}
-        </label>
-        {children}
-    </div>
-);
-
-const NumberInput = ({ value, onChange, suffix, min, max, step = 1, testId }) => (
-    <div className="flex items-center bg-[color:var(--bg-elevated)] rounded-2xl overflow-hidden">
-        <button className="px-4 py-3 text-xl text-[color:var(--text-secondary)]" onClick={() => onChange(Math.max(min, Number(value) - step))}>−</button>
-        <input
-            data-testid={testId}
-            type="number"
-            value={value}
-            step={step}
-            min={min}
-            max={max}
-            onChange={(e) => onChange(Number(e.target.value))}
-            className="flex-1 bg-transparent text-center font-display text-2xl outline-none py-3"
-        />
-        <span className="pr-4 text-sm text-[color:var(--text-secondary)]">{suffix}</span>
-        <button className="px-4 py-3 text-xl text-[color:var(--text-secondary)]" onClick={() => onChange(Math.min(max, Number(value) + step))}>+</button>
-    </div>
-);
+export default OnboardingDialog;
