@@ -277,4 +277,31 @@ export const OnboardingDialog = ({ onSubmit }) => {
     );
 };
 
+const Field = ({ label, children }) => (
+    <div>
+        <label className="block text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] mb-2">
+            {label}
+        </label>
+        {children}
+    </div>
+);
+
+const NumberInput = ({ value, onChange, suffix, min, max, step = 1, testId }) => (
+    <div className="flex items-center bg-[color:var(--bg-elevated)] rounded-2xl overflow-hidden">
+        <button className="px-4 py-3 text-xl text-[color:var(--text-secondary)]" onClick={() => onChange(Math.max(min, Number(value) - step))}>−</button>
+        <input
+            data-testid={testId}
+            type="number"
+            value={value}
+            step={step}
+            min={min}
+            max={max}
+            onChange={(e) => onChange(Number(e.target.value))}
+            className="flex-1 bg-transparent text-center font-display text-2xl outline-none py-3"
+        />
+        <span className="pr-4 text-sm text-[color:var(--text-secondary)]">{suffix}</span>
+        <button className="px-4 py-3 text-xl text-[color:var(--text-secondary)]" onClick={() => onChange(Math.min(max, Number(value) + step))}>+</button>
+    </div>
+);
+
 export default OnboardingDialog;
