@@ -31,6 +31,18 @@ function Shell() {
             if (!p) setShowOnboarding(true);
         } catch (e) {
             console.error("Failed to load profile:", e);
+            // If the backend requires authentication (401), we should show onboarding
+            // so the user can sign in and complete the flow.
+            // Axios errors expose response.status; otherwise fallback to showing onboarding
+            const status = e?.response?.status;
+            if (status === 401) {
+                setShowOnboarding(true);
+            } else {
+                // For other errors (network), be conservative and show onboarding as well
+                // so users can attempt to continue. This mirrors previous UX where missing
+                // profile led to onboarding flow.
+                setShowOnboarding(true);
+            }
         } finally {
             setLoading(false);
         }
@@ -53,16 +65,67 @@ function Shell() {
     migrateDeviceData();
 }, [user]);
     
+    // Key used to persist onboarding form across OAuth redirect
+    const PENDING_ONBOARDING_KEY = "pending_onboarding_form_v1";
+
+    // When finishing onboarding: if already authenticated, save immediately.
+    // Otherwise persist the form and start OAuth sign-in; the pending form will be
+    // completed after the auth listener detects a session.
     const finishOnboarding = async (form) => {
         try {
-            const p = await saveProfile({ device_id: getDeviceId(), ...form });
-            setProfile(p);
-            setShowOnboarding(false);
-            setTab("fotocamera");
+            if (user) {
+                // Authenticated: call saveProfile directly. Do not include device_id —
+                // interceptor will attach Authorization header and backend expects JWT.
+                const p = await saveProfile({ ...form });
+                setProfile(p);
+                setShowOnboarding(false);
+                setTab("fotocamera");
+            } else {
+                try {
+                    localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(form));
+                } catch (e) {
+                    console.warn("Failed to persist pending onboarding form:", e);
+                }
+
+                // Trigger OAuth sign-in (redirect). After redirect back the AuthProvider
+                // will update `user` and the effect below will complete the onboarding.
+                await supabase.auth.signInWithOAuth({ provider: "google" });
+            }
         } catch (e) {
             console.error(e);
         }
     };
+
+    // Complete pending onboarding after sign-in
+    useEffect(() => {
+        async function completePendingOnboarding() {
+            if (!user) return;
+
+            let raw = null;
+            try {
+                raw = localStorage.getItem(PENDING_ONBOARDING_KEY);
+            } catch (e) {
+                console.warn("Failed to read pending onboarding form:", e);
+                raw = null;
+            }
+            if (!raw) return;
+
+            try {
+                const pendingForm = JSON.parse(raw);
+                // Remove early to avoid double-submit
+                localStorage.removeItem(PENDING_ONBOARDING_KEY);
+
+                const p = await saveProfile({ ...pendingForm });
+                setProfile(p);
+                setShowOnboarding(false);
+                setTab("fotocamera");
+            } catch (e) {
+                console.error("Failed to complete pending onboarding after sign-in:", e);
+            }
+        }
+
+        completePendingOnboarding();
+    }, [user]);
 
     if (loading) {
         return (
