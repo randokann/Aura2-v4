@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 4 backend testing for NutriSnap v4 (8-language support, POST /api/pantry/extract, log_date filter on GET /api/workouts). Wrote 17 new tests at /app/backend/tests/test_iter4_multilang.py: (a) analyze-food multi-lang [es/fr/de/zh] using real /tmp/food.jpg with per-language regex marker heuristics; (b) meal-plan/generate lang=fr iperproteico days=2 verifying French text + Italian internal meal_type keys preserved; (c) coach/recovery for [es,fr,de,sq,el,zh] checking status string is one of RECOVERY_STATUS_LABELS[lang]; (d) coach/recovery lang='xx' falls back to EN status labels; (e) coach/program lang='de' checking German markers in title/summary/day labels/focus/exercise names/tips; (f) pantry/extract for [en,it] with /tmp/food.jpg -> non-empty ingredients, <=40 items, deduped case-insensitively, each <=50 chars; (g) pantry/extract with empty image_base64 returns 400; (h) workouts log_date filter: 3 seeded logs (2 today, 1 other) -> GET without filter returns 3, GET with today returns 2, GET with other returns 1. All 17/17 passed in ~59s. Regression: reran iter2 (test_backend.py) + iter3 (test_lang_iter3.py) suites -> 22/22 passed. Grand total: 39/39 backend tests pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter4_multilang.py",
+    "/app/backend/tests/test_lang_iter3.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/iter4.xml",
+    "/app/test_reports/pytest/iter4_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py has grown to 1132 lines with 3 large duplicated prompt branches (it vs non-it) in analyze_food, generate_meal_plan, analyze_form, generate_program, estimate_recovery. Consider a single i18n prompt-template layer keyed by lang - the two hard-coded branches per endpoint are risky when adding a 9th language.",
+    "PRESET_DIRECTIVES vs PRESET_DIRECTIVES_EN only exist in two languages while LANGUAGE_NAMES supports 8. Meal-plan directive text is delivered in EN for es/fr/de/sq/el/zh which is fine (LLM still translates output) but inconsistent - either localize directives per lang or drop the IT branch and always use English directives with a lang instruction.",
+    "PantryRequest.image_base64 has no max size validation; a 10MB payload could OOM. Add pydantic constraint or nginx-level limit.",
+    "PantryResponse dedup uses `v.strip()[:50]` then lower key - if two items differ only by trailing whitespace after 50 chars they collapse; acceptable but worth a comment.",
+    "GET /api/workouts log_date is a plain string filter with no format validation - an invalid date silently returns 0 rows instead of 400. Consider validating YYYY-MM-DD via pydantic Query regex.",
+    "analyze_food default fallback dish_name='Piatto non identificato' is Italian even when lang!='it'. Small leak of IT into other-language responses when LLM omits dish_name (rare)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter4_multilang.py (new)"
+  ],
+  "success_rate": {"backend": "100% (39/39: 17 new + 22 regression)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "N/A - device_id based (TEST_device_iter2, TEST_iter4_wk_<uuid>)",
+  "seed_data_creation": "TestWorkoutsLogDateFilter creates 3 workout entries under a per-test-run TEST_iter4_wk_<uuid> device_id (not cleaned up but negligible and prefixed for identification).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend supports 8 langs via LANGUAGE_NAMES + normalize_lang() + RECOVERY_STATUS_LABELS. Three test files now exist: test_backend.py (base regression), test_lang_iter3.py (EN/IT + ingredients preset), test_iter4_multilang.py (8-lang + pantry + log_date). Language content is validated via per-lang regex markers (Cyrillic-style ranges for zh/el, diacritic + stopword sets for es/fr/de/sq) rather than strict equality - robust to LLM variance. /tmp/food.jpg is used as both food-analysis and pantry-scan image (pantry endpoint returns edible ingredients from a food photo, which was accepted). meal_type keys stay Italian (colazione/pranzo/cena/spuntino) regardless of lang - by design.",
+  "rca of the issue": "N/A - no failures."
+}

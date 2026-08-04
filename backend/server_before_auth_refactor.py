@@ -1,0 +1,777 @@
+import os
+import logging
+import uuid
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+from supabase import create_client, Client
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # fixed
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY
+)
+
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from auth import get_current_user
+from starlette.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional, Literal
+from datetime import datetime, timezone
+from ai import get_ai_service, AIProviderError
+from ai.constants import recovery_status_for
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000",],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+api_router = APIRouter()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Single AI service used by every endpoint. Swap providers via AI_PROVIDER env.
+ai = get_ai_service()
+
+
+# ============ MODELS ============
+
+class FoodItem(BaseModel):
+    name: str
+    quantity: str
+    calories: float
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
+    fiber: float = 0
+
+class AnalyzeRequest(BaseModel):
+    image_base64: str
+    mime_type: str = "image/jpeg"
+    lang: str = "en"
+
+class AnalyzeResponse(BaseModel):
+    dish_name: str
+    confidence: dict
+    foods: List[FoodItem]
+    total_calories: float
+    total_protein: float
+    total_carbs: float
+    total_fat: float
+    total_fiber: float
+    notes: str
+
+class Clarification(BaseModel):
+    """Question from AI when uncertain."""
+    question: str
+    options: List[str]
+    clarification_type: str = "ingredient"
+
+
+class AnalyzeResponseWithClarification(BaseModel):
+    """Food analysis response with optional AI clarification."""
+    needs_clarification: bool = False
+    clarification: Optional[Clarification] = None
+
+    dish_name: Optional[str] = None
+    confidence: Optional[dict] = None
+    foods: Optional[List[FoodItem]] = None
+
+    total_calories: Optional[float] = None
+    total_protein: Optional[float] = None
+    total_carbs: Optional[float] = None
+    total_fat: Optional[float] = None
+    total_fiber: Optional[float] = None
+
+    notes: Optional[str] = None
+
+
+class ClarifyRequest(BaseModel):
+    """User answer to AI clarification."""
+    device_id: Optional[str] = None
+    image_base64: str
+    original_question: str
+    user_answer: str
+    clarification_type: str = "ingredient"
+    lang: str = "en"
+
+class AssociateRequest(BaseModel):
+    device_id: str
+
+class Profile(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    device_id: Optional[str] = None
+    user_id: Optional[str] = None
+    name: Optional[str] = ""
+    age: int = 30
+    sex: Literal["maschio", "femmina"] = "maschio"
+    height_cm: float = 170
+    current_weight_kg: float = 70
+    target_weight_kg: float = 68
+    activity_level: Literal["sedentario", "leggero", "moderato", "intenso", "molto_intenso"] = "moderato"
+    goal: Literal["dimagrire", "mantenere", "aumentare"] = "mantenere"
+    daily_calorie_goal: float = 2000
+    protein_goal: float = 120
+    carbs_goal: float = 250
+    fat_goal: float = 65
+    fiber_goal: float = 30
+    bmi: float = 0
+    bmi_category: str = ""
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ProfileInput(BaseModel):
+    device_id: Optional[str] = None
+    name: Optional[str] = ""
+    age: int
+    sex: Literal["maschio", "femmina"]
+    height_cm: float
+    current_weight_kg: float
+    target_weight_kg: float
+    activity_level: Literal["sedentario", "leggero", "moderato", "intenso", "molto_intenso"]
+    goal: Literal["dimagrire", "mantenere", "aumentare"]
+
+class MealCreate(BaseModel):
+    device_id: Optional[str] = None
+    dish_name: str
+    foods: List[FoodItem]
+    total_calories: float
+    total_protein: float
+    total_carbs: float
+    total_fat: float
+    total_fiber: float
+    image_base64: Optional[str] = ""
+    meal_date: str
+    meal_type: Literal["colazione", "pranzo", "cena", "spuntino"] = "pranzo"
+    notes: str = ""
+
+class Meal(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    device_id: Optional[str] = None
+    user_id: Optional[str] = None
+    dish_name: str
+    foods: List[FoodItem]
+    total_calories: float
+    total_protein: float
+    total_carbs: float
+    total_fat: float
+    total_fiber: float
+    image_base64: str = ""
+    meal_date: str
+    meal_type: str
+    notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ============ NON-AI HELPERS ============
+
+def compute_bmi(weight_kg: float, height_cm: float) -> tuple[float, str]:
+    if height_cm <= 0:
+        return 0, "n/d"
+    bmi = weight_kg / ((height_cm / 100) ** 2)
+    cat = "n/d"
+    if bmi < 18.5:
+        cat = "sottopeso"
+    elif bmi < 25:
+        cat = "normopeso"
+    elif bmi < 30:
+        cat = "sovrappeso"
+    else:
+        cat = "obesità"
+    return round(bmi, 1), cat
+
+
+def compute_calorie_goal(p: ProfileInput) -> dict:
+    if p.sex == "maschio":
+        bmr = 10 * p.current_weight_kg + 6.25 * p.height_cm - 5 * p.age + 5
+    else:
+        bmr = 10 * p.current_weight_kg + 6.25 * p.height_cm - 5 * p.age - 161
+    factors = {"sedentario": 1.2, "leggero": 1.375, "moderato": 1.55, "intenso": 1.725, "molto_intenso": 1.9}
+    tdee = bmr * factors[p.activity_level]
+    diff = p.target_weight_kg - p.current_weight_kg
+    if p.goal == "dimagrire" or diff < -0.5:
+        calorie_goal = tdee - 500
+    elif p.goal == "aumentare" or diff > 0.5:
+        calorie_goal = tdee + 400
+    else:
+        calorie_goal = tdee
+    calorie_goal = max(1200, round(calorie_goal))
+    protein_g = round((calorie_goal * 0.30) / 4)
+    carbs_g = round((calorie_goal * 0.40) / 4)
+    fat_g = round((calorie_goal * 0.30) / 9)
+    fiber_g = 30 if p.sex == "maschio" else 25
+    bmi, bmi_cat = compute_bmi(p.current_weight_kg, p.height_cm)
+    return {
+        "daily_calorie_goal": calorie_goal, "protein_goal": protein_g,
+        "carbs_goal": carbs_g, "fat_goal": fat_g, "fiber_goal": fiber_g,
+        "bmi": bmi, "bmi_category": bmi_cat,
+    }
+
+
+def _ai_error(e: Exception, generic: str = "AI error") -> HTTPException:
+    """Uniform 500 for AI provider failures."""
+    logger.exception(generic)
+    return HTTPException(status_code=500, detail=f"{generic}: {str(e)}")
+
+
+# Helper: optional auth for endpoints that allow anonymous access
+async def _optional_current_user(request: Request):
+    """
+    Return the authenticated user dict from get_current_user() if present and valid,
+    otherwise return None. This allows co-existence of auth and anonymous flows.
+    """
+    auth = None
+    if request is not None:
+        auth = request.headers.get("authorization")
+    if not auth:
+        return None
+    try:
+        return await get_current_user(authorization=auth)
+    except HTTPException:
+        return None
+
+
+# Helper: centralize ownership resolution – returns (field, value)
+async def get_owner_filter(request: Request, device_id: Optional[str] = None) -> tuple[str, str]:
+    """
+    Return a tuple (field, value) resolving ownership.
+    For authenticated requests returns ("user_id", <id>); for anonymous returns ("device_id", <id>).
+    Anonymous callers MUST provide device_id (HTTP 400 otherwise).
+    """
+    user = await _optional_current_user(request)
+    if user:
+        return ("user_id", user["id"])
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id required for anonymous requests")
+    return ("device_id", device_id)
+
+
+# ============ FOOD / MEALS ============
+
+@api_router.get("/")
+async def root():
+    return {"message": "NutriSnap API attiva"}
+
+
+@api_router.post("/analyze-food", response_model=AnalyzeResponseWithClarification)
+async def analyze_food(req: AnalyzeRequest):
+
+    if not req.image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 required")
+
+    try:
+        data = await ai.analyze_food(
+            image_base64=req.image_base64,
+            lang=req.lang,
+        )
+
+    except AIProviderError as e:
+        raise _ai_error(e, "Food analysis error")
+
+    return AnalyzeResponseWithClarification(**data)
+
+
+@api_router.get("/me")
+async def get_me(user=Depends(get_current_user)):
+    return {
+        "user_id": user["id"],
+        "email": user["email"]
+    }
+
+
+@api_router.post("/clarify-food", response_model=AnalyzeResponse)
+async def clarify_food(req: ClarifyRequest):
+
+    if not req.image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 required")
+
+    try:
+        data = await ai.clarify_food_analysis(
+            image_base64=req.image_base64,
+            original_question=req.original_question,
+            user_answer=req.user_answer,
+            clarification_type=req.clarification_type,
+            lang=req.lang,
+        )
+
+    except AIProviderError as e:
+        raise _ai_error(e, "Clarification error")
+
+    return AnalyzeResponse(**data)    
+
+
+@api_router.post("/auth/associate")
+async def associate_device(req: AssociateRequest, user=Depends(get_current_user)):
+    """
+    Associate anonymous device data (device_id) with the authenticated Supabase user id.
+    Idempotent: repeated calls with same device_id and same authenticated user are safe.
+    """
+    device_id = req.device_id
+    user_id = user["id"]
+
+    if not device_id:
+        raise HTTPException(400, "device_id required")
+
+    collections = ["profiles", "meals", "meal_plans", "workouts"]
+    summary = {}
+    for name in collections:
+        try:
+            # Simple update: set user_id for all records with this device_id
+            resp = supabase.table(name).update({"user_id": user_id}).eq("device_id", device_id).execute()
+            summary[name] = {
+                "matched_count": len(resp.data),
+                "modified_count": len(resp.data)
+            }
+        except Exception as e:
+            logger.exception("Failed updating collection %s: %s", name, str(e))
+            summary[name] = {"error": str(e)}
+
+    return {"ok": True, "user_id": user_id, "device_id": device_id, "summary": summary}
+
+
+@api_router.post("/profile", response_model=Profile)
+async def save_profile(p: ProfileInput, request: Request):
+    field, value = await get_owner_filter(request, device_id=p.device_id)
+    goals = compute_calorie_goal(p)
+
+    profile_data = {
+        "name": p.name or "",
+        "age": p.age,
+        "sex": p.sex,
+        "height_cm": p.height_cm,
+        "current_weight_kg": p.current_weight_kg,
+        "target_weight_kg": p.target_weight_kg,
+        "activity_level": p.activity_level,
+        "goal": p.goal,
+        **goals,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Add ownership field
+    if field == "user_id":
+        profile_data["user_id"] = value
+    else:
+        profile_data["device_id"] = value
+
+    # Upsert using Supabase – conflict on the ownership field (must be unique)
+    supabase.table("profiles").upsert(profile_data, on_conflict=field).execute()
+
+    return Profile(**profile_data)
+
+
+@app.get("/test-supabase")
+def test_supabase():
+    result = supabase.table("profiles").select("*").limit(1).execute()
+    return result.data
+
+
+@api_router.get("/profile/{device_id}", response_model=Optional[Profile])
+async def get_profile(device_id: str, request: Request):
+    field, value = await get_owner_filter(request, device_id=device_id)
+    resp = supabase.table("profiles").select("*").eq(field, value).execute()
+    if resp.data:
+        return Profile(**resp.data[0])
+    return None
+
+
+@api_router.post("/meals", response_model=Meal)
+async def create_meal(m: MealCreate, request: Request):
+    field, value = await get_owner_filter(request, device_id=m.device_id)
+
+    meal_data = {
+        "id": str(uuid.uuid4()),
+        "dish_name": m.dish_name,
+        "foods": [f.model_dump() for f in m.foods],
+        "total_calories": m.total_calories,
+        "total_protein": m.total_protein,
+        "total_carbs": m.total_carbs,
+        "total_fat": m.total_fat,
+        "total_fiber": m.total_fiber,
+        "image_base64": m.image_base64 or "",
+        "meal_date": m.meal_date,
+        "meal_type": m.meal_type,
+        "notes": m.notes,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if field == "user_id":
+        meal_data["user_id"] = value
+    else:
+        meal_data["device_id"] = value
+
+    supabase.table("meals").insert(meal_data).execute()
+    return Meal(**meal_data)
+
+
+@api_router.get("/meals", response_model=List[Meal])
+async def list_meals(device_id: Optional[str] = None, meal_date: Optional[str] = None, request: Request = None):
+    field, value = await get_owner_filter(request, device_id=device_id)
+    query = supabase.table("meals").select("*").eq(field, value)
+    if meal_date:
+        query = query.eq("meal_date", meal_date)
+    resp = query.order("created_at", desc=True).execute()
+    docs = resp.data
+    return [Meal(**d) for d in docs]
+
+
+@api_router.delete("/meals/{meal_id}")
+async def delete_meal(meal_id: str, device_id: Optional[str] = None, request: Request = None):
+    field, value = await get_owner_filter(request, device_id=device_id)
+    resp = supabase.table("meals").delete().eq("id", meal_id).eq(field, value).execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Pasto non trovato")
+    return {"ok": True}
+
+
+@api_router.get("/daily-summary")
+async def daily_summary(
+    meal_date: str,
+    device_id: Optional[str] = None,
+    request: Request = None
+):
+    field, value = await get_owner_filter(request, device_id=device_id)
+
+    # Fetch meals for the day
+    resp_meals = supabase.table("meals").select("*").eq(field, value).eq("meal_date", meal_date).execute()
+    docs = resp_meals.data
+
+    # Fetch profile
+    resp_profile = supabase.table("profiles").select("*").eq(field, value).execute()
+    profile_doc = resp_profile.data[0] if resp_profile.data else None
+
+    totals = {
+        "calories": sum(d.get("total_calories", 0) for d in docs),
+        "protein": sum(d.get("total_protein", 0) for d in docs),
+        "carbs": sum(d.get("total_carbs", 0) for d in docs),
+        "fat": sum(d.get("total_fat", 0) for d in docs),
+        "fiber": sum(d.get("total_fiber", 0) for d in docs),
+        "meal_count": len(docs),
+    }
+
+    goals = None
+    if profile_doc:
+        goals = {
+            "calories": profile_doc.get("daily_calorie_goal", 2000),
+            "protein": profile_doc.get("protein_goal", 120),
+            "carbs": profile_doc.get("carbs_goal", 250),
+            "fat": profile_doc.get("fat_goal", 65),
+            "fiber": profile_doc.get("fiber_goal", 30),
+        }
+
+    return {
+        "totals": totals,
+        "goals": goals,
+        "meal_date": meal_date
+    }
+
+
+# ============ MEAL PLANNING ============
+
+class MealPlanRequest(BaseModel):
+    device_id: Optional[str] = None
+    preset: Literal["ipercalorico", "iperproteico", "ipocalorico", "bilanciato", "keto", "vegetariano", "vegano", "mediterraneo", "custom", "ingredients"] = "bilanciato"
+    custom_prompt: str = ""
+    days: int = 3
+    target_calories: Optional[int] = None
+    allergies: str = ""
+    ingredients: List[str] = []
+    lang: str = "en"
+
+class PlannedMeal(BaseModel):
+    meal_type: str
+    name: str
+    description: str
+    calories: float
+    protein: float
+    carbs: float
+    fat: float
+    ingredients: List[str] = []
+
+class PlannedDay(BaseModel):
+    day: int
+    label: str
+    meals: List[PlannedMeal]
+    total_calories: float
+    total_protein: float
+    total_carbs: float
+    total_fat: float
+
+class MealPlanResponse(BaseModel):
+    title: str
+    summary: str
+    days: List[PlannedDay]
+
+class MealPlanSave(MealPlanResponse):
+    device_id: Optional[str] = None
+    preset: str = "custom"
+
+class SavedMealPlan(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    device_id: Optional[str] = None
+    user_id: Optional[str] = None
+    title: str
+    summary: str
+    preset: str
+    days: List[PlannedDay]
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+@api_router.post("/meal-plan/generate", response_model=MealPlanResponse)
+async def generate_meal_plan(req: MealPlanRequest, request: Request):
+    field, value = await get_owner_filter(request, device_id=req.device_id)
+    # Resolve profile by ownership
+    resp_profile = supabase.table("profiles").select("*").eq(field, value).execute()
+    profile = resp_profile.data[0] if resp_profile.data else None
+
+    days = max(1, min(7, req.days))
+    target_kcal = req.target_calories or (profile.get("daily_calorie_goal") if profile else 2000)
+    try:
+        data = await ai.generate_meal_plan(
+            preset=req.preset, days=days, target_kcal=int(target_kcal),
+            allergies=req.allergies, custom_prompt=req.custom_prompt,
+            ingredients=req.ingredients, profile=profile, lang=req.lang,
+        )
+    except AIProviderError as e:
+        raise _ai_error(e, "Meal plan error")
+    return MealPlanResponse(**data)
+
+
+@api_router.post("/meal-plans", response_model=SavedMealPlan)
+async def save_meal_plan(payload: MealPlanSave, request: Request):
+    field, value = await get_owner_filter(request, device_id=payload.device_id)
+    saved = SavedMealPlan(
+        device_id=payload.device_id, title=payload.title, summary=payload.summary,
+        preset=payload.preset, days=payload.days,
+    )
+    doc = saved.model_dump()
+    if field == "user_id":
+        doc["user_id"] = value
+        doc.pop("device_id", None)  # remove device_id for authenticated saves
+    else:
+        doc["device_id"] = value
+    supabase.table("meal_plans").insert(doc).execute()
+    return SavedMealPlan(**doc)
+
+
+@api_router.get("/meal-plans", response_model=List[SavedMealPlan])
+async def list_meal_plans(device_id: Optional[str] = None, request: Request = None):
+    field, value = await get_owner_filter(request, device_id=device_id)
+    resp = supabase.table("meal_plans").select("*").eq(field, value).order("created_at", desc=True).execute()
+    return [SavedMealPlan(**d) for d in resp.data]
+
+
+@api_router.delete("/meal-plans/{plan_id}")
+async def delete_meal_plan(plan_id: str, device_id: Optional[str] = None, request: Request = None):
+    field, value = await get_owner_filter(request, device_id=device_id)
+    resp = supabase.table("meal_plans").delete().eq("id", plan_id).eq(field, value).execute()
+    if not resp.data:
+        raise HTTPException(404, "Piano non trovato")
+    return {"ok": True}
+
+
+# ============ FITNESS COACHING ============
+
+class FormAnalysisRequest(BaseModel):
+    device_id: Optional[str] = None
+    exercise_name: str
+    frames_base64: List[str]
+    lang: str = "en"
+
+class FormAnalysisResponse(BaseModel):
+    exercise: str
+    overall_score: int
+    verdict: str
+    strengths: List[str]
+    corrections: List[str]
+    risk_areas: List[str]
+    cues: List[str]
+
+class ProgramRequest(BaseModel):
+    device_id: Optional[str] = None
+    goal: Literal["forza", "ipertrofia", "dimagrimento", "resistenza", "mobilita"] = "ipertrofia"
+    level: Literal["principiante", "intermedio", "avanzato"] = "intermedio"
+    days_per_week: int = 4
+    equipment: Literal["palestra_completa", "casa_manubri", "corpo_libero", "outdoor"] = "palestra_completa"
+    focus_areas: str = ""
+    plateau_info: str = ""
+    lang: str = "en"
+
+class WorkoutExercise(BaseModel):
+    name: str
+    sets: int
+    reps: str
+    rest_sec: int
+    notes: str = ""
+
+class WorkoutDay(BaseModel):
+    day: int
+    label: str
+    focus: str
+    exercises: List[WorkoutExercise]
+
+class ProgramResponse(BaseModel):
+    title: str
+    summary: str
+    weeks: int
+    days: List[WorkoutDay]
+    progression_tips: List[str]
+
+class RecoveryRequest(BaseModel):
+    device_id: Optional[str] = None
+    sleep_hours: float
+    sleep_quality: int
+    soreness: int
+    energy: int
+    stress: int
+    last_workout_intensity: Literal["nessuno", "leggero", "moderato", "intenso"] = "moderato"
+    lang: str = "en"
+
+class RecoveryResponse(BaseModel):
+    readiness_score: int
+    status: str
+    recommendation: str
+    workout_advice: str
+
+class WorkoutLog(BaseModel):
+    device_id: Optional[str] = None
+    exercise: str
+    sets: int
+    reps: int
+    weight_kg: float = 0
+    duration_min: int = 0
+    notes: str = ""
+    log_date: str
+
+class WorkoutEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    device_id: Optional[str] = None
+    user_id: Optional[str] = None
+    exercise: str
+    sets: int
+    reps: int
+    weight_kg: float = 0
+    duration_min: int = 0
+    notes: str = ""
+    log_date: str
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+@api_router.post("/coach/form-analysis", response_model=FormAnalysisResponse)
+async def analyze_form(req: FormAnalysisRequest):
+    if not req.frames_base64:
+        raise HTTPException(400, "Need at least 1 frame")
+    try:
+        data = await ai.analyze_exercise_form(
+            exercise_name=req.exercise_name, frames_base64=req.frames_base64, lang=req.lang,
+        )
+    except AIProviderError as e:
+        raise _ai_error(e, "Form analysis error")
+    return FormAnalysisResponse(**data)
+
+
+@api_router.post("/coach/program", response_model=ProgramResponse)
+async def generate_program(req: ProgramRequest, request: Request):
+    field, value = await get_owner_filter(request, device_id=req.device_id)
+
+    # Fetch profile
+    resp_profile = supabase.table("profiles").select("*").eq(field, value).execute()
+    profile = resp_profile.data[0] if resp_profile.data else None
+
+    # Fetch recent workouts
+    resp_workouts = supabase.table("workouts").select("*").eq(field, value).order("created_at", desc=True).limit(30).execute()
+    recent = resp_workouts.data
+
+    plateau_context = ""
+    if recent and not req.plateau_info:
+        exercises: dict = {}
+        for w in recent:
+            exercises.setdefault(w["exercise"], []).append(w.get("weight_kg", 0))
+        stalled = [ex for ex, ws in exercises.items() if len(ws) >= 3 and max(ws) - min(ws) < 2.5]
+        if stalled:
+            plateau_context = f"Plateau detected on: {', '.join(stalled[:3])}. "
+
+    try:
+        data = await ai.generate_program(
+            goal=req.goal, level=req.level, days_per_week=req.days_per_week,
+            equipment=req.equipment, focus_areas=req.focus_areas,
+            plateau_info=req.plateau_info, plateau_context=plateau_context,
+            profile=profile, lang=req.lang,
+        )
+    except AIProviderError as e:
+        raise _ai_error(e, "Program error")
+    return ProgramResponse(**data)
+
+
+@api_router.post("/coach/recovery", response_model=RecoveryResponse)
+async def estimate_recovery(req: RecoveryRequest):
+    # Algorithmic score (deterministic, provider-independent)
+    sleep_score = min(100, (req.sleep_hours / 8) * 100 * (req.sleep_quality / 10))
+    soreness_score = (10 - req.soreness) * 10
+    energy_score = req.energy * 10
+    stress_score = (10 - req.stress) * 10
+    intensity_penalty = {"nessuno": 0, "leggero": 5, "moderato": 12, "intenso": 22}[req.last_workout_intensity]
+    base = (sleep_score * 0.35 + soreness_score * 0.25 + energy_score * 0.25 + stress_score * 0.15) - intensity_penalty
+    score = max(0, min(100, round(base)))
+    status = recovery_status_for(score, req.lang)
+
+    try:
+        advice = await ai.recovery_advice(
+            score=score, status=status,
+            sleep_hours=req.sleep_hours, sleep_quality=req.sleep_quality,
+            soreness=req.soreness, energy=req.energy, stress=req.stress,
+            last_workout_intensity=req.last_workout_intensity, lang=req.lang,
+        )
+    except AIProviderError as e:
+        raise _ai_error(e, "Recovery advice error")
+
+    return RecoveryResponse(
+        readiness_score=score, status=status,
+        recommendation=advice.get("recommendation", ""),
+        workout_advice=advice.get("workout_advice", ""),
+    )
+
+
+@api_router.post("/workouts", response_model=WorkoutEntry)
+async def log_workout(w: WorkoutLog, request: Request):
+    field, value = await get_owner_filter(request, device_id=w.device_id)
+    entry = WorkoutEntry(**w.model_dump())
+    doc = entry.model_dump()
+    if field == "user_id":
+        doc["user_id"] = value
+        doc.pop("device_id", None)
+    else:
+        doc["device_id"] = value
+    supabase.table("workouts").insert(doc).execute()
+    return WorkoutEntry(**doc)
+
+
+@api_router.get("/workouts", response_model=List[WorkoutEntry])
+async def list_workouts(
+    device_id: Optional[str] = None,
+    limit: int = 50,
+    log_date: Optional[str] = None,
+    request: Request = None,
+):
+    field, value = await get_owner_filter(request, device_id=device_id)
+    query = supabase.table("workouts").select("*").eq(field, value)
+    if log_date:
+        query = query.eq("log_date", log_date)
+    resp = query.order("created_at", desc=True).limit(limit).execute()
+    return [WorkoutEntry(**d) for d in resp.data]
+
+
+app.include_router(api_router, prefix="/api")

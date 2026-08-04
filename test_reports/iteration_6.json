@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 6 AI-provider modularization refactor. Full backend regression PASSES: 58/58 tests green (49 pre-existing + 9 new refactor-invariant tests). All endpoint contracts unchanged; response shapes and content identical to iter5. Verified server.py no longer imports emergentintegrations directly, get_ai_service() is a singleton (id() matches across calls & re-imports), compute_bmi/compute_calorie_goal remain in server.py, and RECOVERY_STATUS_LABELS (now in ai/constants.py) have identical values/order in all 8 languages.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/analyze-food", "issue": "test_analyze_food_lang[fr] still occasionally flaky (~10% - Gemini non-determinism from iter5); passed on this run."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter6_refactor.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_lang_iter3.py",
+    "/app/backend/tests/test_iter4_multilang.py",
+    "/app/backend/tests/test_iter5_codequality.py",
+    "/app/test_reports/pytest/iter6_full.xml"
+  ],
+  "action_items": [
+    "None. Refactor is transparent; all endpoint contracts preserved.",
+    "Optional (non-blocking, carried over): migrate FastAPI on_event('shutdown') to lifespan handler."
+  ],
+  "critical_code_review_comments": [
+    "ai/__init__.py cleanly separates provider selection via AI_PROVIDER env; adding a new backend is a 2-step registration (good).",
+    "ai/base.py AIProvider ABC + extract_json helper is a solid seam; concrete SDK imports are confined to ai/gemini_provider.py.",
+    "ai/service.py owns all prompts + default field seeding, so provider swap is truly transparent to endpoints.",
+    "server.py trimmed from 1138 -> 565 lines; endpoints only touch DB + Pydantic + AIService methods. Good separation.",
+    "get_ai_service() uses @lru_cache(maxsize=1) - correct singleton semantics; verified id() matches across imports.",
+    "Recovery status computation (score + label) stays algorithmic in server.py; only the free-text advice is delegated to the LLM - preserves iter5 behavior exactly.",
+    "GeminiProvider retries once on transient failure (max_retries=1 default) and wraps errors in AIProviderError - endpoints then re-raise as HTTP 500 via _ai_error(). Consistent error contract."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter6_refactor.py (new)"
+  ],
+  "success_rate": {"backend": "100% (58/58)", "frontend": "n/a - skipped per request"},
+  "test_credentials": "n/a - device_id based, no auth",
+  "seed_data_creation": "Re-downloaded /tmp/food.jpg, /tmp/pantry.jpg, /tmp/img1-3.jpg (missing in this env). Real photos required by AI-dependent tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "AI subsystem lives under /app/backend/ai/. To add a new provider register it in ai/__init__.py._build_provider. Endpoints must never import SDKs directly. Test images at /tmp/*.jpg are required by AI tests; the pantry.jpg URL used previously (unsplash 1584473457409-ce95a9c00c86) returned 29 bytes - use the pexels URL instead (photo 4033148). analyze_food[fr] remains ~10% flaky due to LLM non-determinism.",
+  "rca_of_the_issue": "n/a - clean regression pass on the refactor."
+}

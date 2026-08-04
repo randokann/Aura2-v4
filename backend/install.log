@@ -1,0 +1,434 @@
+Collecting fastapi==0.110.1 (from -r requirements.txt (line 1))
+  Using cached fastapi-0.110.1-py3-none-any.whl.metadata (24 kB)
+Collecting starlette==0.37.2 (from -r requirements.txt (line 2))
+  Using cached starlette-0.37.2-py3-none-any.whl.metadata (5.9 kB)
+Collecting uvicorn==0.25.0 (from -r requirements.txt (line 3))
+  Using cached uvicorn-0.25.0-py3-none-any.whl.metadata (6.4 kB)
+Collecting pydantic==2.13.4 (from -r requirements.txt (line 5))
+  Using cached pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+Collecting python-dotenv==1.2.2 (from -r requirements.txt (line 6))
+  Using cached python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+Collecting google-genai==2.12.1 (from -r requirements.txt (line 8))
+  Using cached google_genai-2.12.1-py3-none-any.whl.metadata (55 kB)
+Collecting openai (from -r requirements.txt (line 9))
+  Using cached openai-2.52.0-py3-none-any.whl.metadata (40 kB)
+Collecting httpx==0.28.1 (from -r requirements.txt (line 10))
+  Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting requests (from -r requirements.txt (line 11))
+  Using cached requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting supabase (from -r requirements.txt (line 13))
+  Using cached supabase-2.31.0-py3-none-any.whl.metadata (4.7 kB)
+Collecting pillow (from -r requirements.txt (line 15))
+  Using cached pillow-12.3.0-cp312-cp312-macosx_10_13_x86_64.whl.metadata (9.1 kB)
+Collecting pillow-heif (from -r requirements.txt (line 16))
+  Using cached pillow_heif-1.5.0-cp312-cp312-macosx_10_15_x86_64.whl.metadata (9.4 kB)
+Collecting python-jose==3.5.0 (from -r requirements.txt (line 18))
+  Using cached python_jose-3.5.0-py2.py3-none-any.whl.metadata (5.5 kB)
+Collecting email-validator==2.3.0 (from -r requirements.txt (line 20))
+  Using cached email_validator-2.3.0-py3-none-any.whl.metadata (26 kB)
+Collecting python-multipart==0.0.32 (from -r requirements.txt (line 21))
+  Using cached python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+Collecting pytest==9.1.1 (from -r requirements.txt (line 23))
+  Using cached pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting pytest-xdist==3.8.0 (from -r requirements.txt (line 24))
+  Using cached pytest_xdist-3.8.0-py3-none-any.whl.metadata (3.0 kB)
+Collecting black==26.5.1 (from -r requirements.txt (line 26))
+  Using cached black-26.5.1-cp312-cp312-macosx_10_13_x86_64.whl.metadata (95 kB)
+Collecting flake8==7.3.0 (from -r requirements.txt (line 27))
+  Using cached flake8-7.3.0-py2.py3-none-any.whl.metadata (3.8 kB)
+Collecting isort==8.0.1 (from -r requirements.txt (line 28))
+  Using cached isort-8.0.1-py3-none-any.whl.metadata (11 kB)
+Collecting typing-extensions>=4.8.0 (from fastapi==0.110.1->-r requirements.txt (line 1))
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting anyio<5,>=3.4.0 (from starlette==0.37.2->-r requirements.txt (line 2))
+  Using cached anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+Collecting annotated-types>=0.6.0 (from pydantic==2.13.4->-r requirements.txt (line 5))
+  Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.4 (from pydantic==2.13.4->-r requirements.txt (line 5))
+  Using cached pydantic_core-2.46.4-cp312-cp312-macosx_10_12_x86_64.whl.metadata (6.6 kB)
+Collecting typing-inspection>=0.4.2 (from pydantic==2.13.4->-r requirements.txt (line 5))
+  Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting click>=7.0 (from uvicorn==0.25.0->-r requirements.txt (line 3))
+  Using cached click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting h11>=0.8 (from uvicorn==0.25.0->-r requirements.txt (line 3))
+  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting google-auth<2.56.0,>=2.48.1 (from google-auth[requests]<2.56.0,>=2.48.1->google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached google_auth-2.55.2-py3-none-any.whl.metadata (5.2 kB)
+Collecting tenacity<9.2.0,>=8.2.3 (from google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+Collecting websockets<17.0,>=13.0.0 (from google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached websockets-16.1.1-cp312-cp312-macosx_10_13_x86_64.whl.metadata (6.8 kB)
+Collecting distro<2,>=1.7.0 (from google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+Collecting sniffio (from google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting certifi (from httpx==0.28.1->-r requirements.txt (line 10))
+  Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting httpcore==1.* (from httpx==0.28.1->-r requirements.txt (line 10))
+  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting idna (from httpx==0.28.1->-r requirements.txt (line 10))
+  Using cached idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+Collecting ecdsa!=0.15 (from python-jose==3.5.0->-r requirements.txt (line 18))
+  Using cached ecdsa-0.19.2-py2.py3-none-any.whl.metadata (29 kB)
+Collecting rsa!=4.1.1,!=4.4,<5.0,>=4.0 (from python-jose==3.5.0->-r requirements.txt (line 18))
+  Using cached rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+Collecting pyasn1>=0.5.0 (from python-jose==3.5.0->-r requirements.txt (line 18))
+  Using cached pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+Collecting dnspython>=2.0.0 (from email-validator==2.3.0->-r requirements.txt (line 20))
+  Using cached dnspython-2.8.0-py3-none-any.whl.metadata (5.7 kB)
+Collecting iniconfig>=1.0.1 (from pytest==9.1.1->-r requirements.txt (line 23))
+  Using cached iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting packaging>=22 (from pytest==9.1.1->-r requirements.txt (line 23))
+  Using cached packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pluggy<2,>=1.5 (from pytest==9.1.1->-r requirements.txt (line 23))
+  Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting pygments>=2.7.2 (from pytest==9.1.1->-r requirements.txt (line 23))
+  Using cached pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting execnet>=2.1 (from pytest-xdist==3.8.0->-r requirements.txt (line 24))
+  Using cached execnet-2.1.2-py3-none-any.whl.metadata (2.9 kB)
+Collecting mypy-extensions>=0.4.3 (from black==26.5.1->-r requirements.txt (line 26))
+  Using cached mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+Collecting pathspec>=1.0.0 (from black==26.5.1->-r requirements.txt (line 26))
+  Using cached pathspec-1.1.1-py3-none-any.whl.metadata (14 kB)
+Collecting platformdirs>=2 (from black==26.5.1->-r requirements.txt (line 26))
+  Using cached platformdirs-4.11.0-py3-none-any.whl.metadata (5.5 kB)
+Collecting pytokens~=0.4.0 (from black==26.5.1->-r requirements.txt (line 26))
+  Using cached pytokens-0.4.1-py3-none-any.whl.metadata (3.8 kB)
+Collecting mccabe<0.8.0,>=0.7.0 (from flake8==7.3.0->-r requirements.txt (line 27))
+  Using cached mccabe-0.7.0-py2.py3-none-any.whl.metadata (5.0 kB)
+Collecting pycodestyle<2.15.0,>=2.14.0 (from flake8==7.3.0->-r requirements.txt (line 27))
+  Using cached pycodestyle-2.14.0-py2.py3-none-any.whl.metadata (4.5 kB)
+Collecting pyflakes<3.5.0,>=3.4.0 (from flake8==7.3.0->-r requirements.txt (line 27))
+  Using cached pyflakes-3.4.0-py2.py3-none-any.whl.metadata (3.5 kB)
+Collecting charset_normalizer<4,>=2 (from requests->-r requirements.txt (line 11))
+  Using cached charset_normalizer-3.4.9-cp312-cp312-macosx_10_13_universal2.whl.metadata (41 kB)
+Collecting urllib3<3,>=1.26 (from requests->-r requirements.txt (line 11))
+  Using cached urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting pyasn1-modules>=0.2.1 (from google-auth<2.56.0,>=2.48.1->google-auth[requests]<2.56.0,>=2.48.1->google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting cryptography>=38.0.3 (from google-auth<2.56.0,>=2.48.1->google-auth[requests]<2.56.0,>=2.48.1->google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached cryptography-50.0.0.tar.gz (880 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Installing backend dependencies: started
+  Installing backend dependencies: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting jiter<1,>=0.10.0 (from openai->-r requirements.txt (line 9))
+  Using cached jiter-0.16.0-cp312-cp312-macosx_10_12_x86_64.whl.metadata (5.2 kB)
+Collecting tqdm>4 (from openai->-r requirements.txt (line 9))
+  Using cached tqdm-4.70.0-py3-none-any.whl.metadata (57 kB)
+Collecting realtime==2.31.0 (from supabase->-r requirements.txt (line 13))
+  Using cached realtime-2.31.0-py3-none-any.whl.metadata (7.0 kB)
+Collecting supabase-functions==2.31.0 (from supabase->-r requirements.txt (line 13))
+  Using cached supabase_functions-2.31.0-py3-none-any.whl.metadata (2.4 kB)
+Collecting storage3==2.31.0 (from supabase->-r requirements.txt (line 13))
+  Using cached storage3-2.31.0-py3-none-any.whl.metadata (2.2 kB)
+Collecting supabase-auth==2.31.0 (from supabase->-r requirements.txt (line 13))
+  Using cached supabase_auth-2.31.0-py3-none-any.whl.metadata (6.4 kB)
+Collecting postgrest==2.31.0 (from supabase->-r requirements.txt (line 13))
+  Using cached postgrest-2.31.0-py3-none-any.whl.metadata (3.4 kB)
+Collecting yarl>=1.22.0 (from supabase->-r requirements.txt (line 13))
+  Using cached yarl-1.24.5-cp312-cp312-macosx_10_13_x86_64.whl.metadata (103 kB)
+Collecting deprecation>=2.1.0 (from postgrest==2.31.0->supabase->-r requirements.txt (line 13))
+  Using cached deprecation-2.1.0-py2.py3-none-any.whl.metadata (4.6 kB)
+Collecting websockets<17.0,>=13.0.0 (from google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached websockets-15.0.1-cp312-cp312-macosx_10_13_x86_64.whl.metadata (6.8 kB)
+Collecting pyjwt>=2.12.0 (from pyjwt[crypto]>=2.12.0->supabase-auth==2.31.0->supabase->-r requirements.txt (line 13))
+  Using cached pyjwt-2.13.0-py3-none-any.whl.metadata (3.4 kB)
+Collecting strenum>=0.4.15 (from supabase-functions==2.31.0->supabase->-r requirements.txt (line 13))
+  Using cached StrEnum-0.4.15-py3-none-any.whl.metadata (5.3 kB)
+Collecting h2<5,>=3 (from httpx[http2]<0.29,>=0.26->postgrest==2.31.0->supabase->-r requirements.txt (line 13))
+  Using cached h2-4.4.0-py3-none-any.whl.metadata (3.8 kB)
+Collecting hyperframe<7,>=6.1 (from h2<5,>=3->httpx[http2]<0.29,>=0.26->postgrest==2.31.0->supabase->-r requirements.txt (line 13))
+  Using cached hyperframe-6.1.0-py3-none-any.whl.metadata (4.3 kB)
+Collecting hpack<5,>=4.2 (from h2<5,>=3->httpx[http2]<0.29,>=0.26->postgrest==2.31.0->supabase->-r requirements.txt (line 13))
+  Using cached hpack-4.2.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting cffi>=2.0.0 (from cryptography>=38.0.3->google-auth<2.56.0,>=2.48.1->google-auth[requests]<2.56.0,>=2.48.1->google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached cffi-2.1.0-cp312-cp312-macosx_10_15_x86_64.whl.metadata (2.5 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=38.0.3->google-auth<2.56.0,>=2.48.1->google-auth[requests]<2.56.0,>=2.48.1->google-genai==2.12.1->-r requirements.txt (line 8))
+  Using cached pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting six>=1.9.0 (from ecdsa!=0.15->python-jose==3.5.0->-r requirements.txt (line 18))
+  Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting multidict>=4.0 (from yarl>=1.22.0->supabase->-r requirements.txt (line 13))
+  Using cached multidict-6.7.1-cp312-cp312-macosx_10_13_x86_64.whl.metadata (5.3 kB)
+Collecting propcache>=0.2.1 (from yarl>=1.22.0->supabase->-r requirements.txt (line 13))
+  Using cached propcache-0.5.2-cp312-cp312-macosx_10_13_x86_64.whl.metadata (16 kB)
+Using cached fastapi-0.110.1-py3-none-any.whl (91 kB)
+Using cached starlette-0.37.2-py3-none-any.whl (71 kB)
+Using cached pydantic-2.13.4-py3-none-any.whl (472 kB)
+Using cached uvicorn-0.25.0-py3-none-any.whl (60 kB)
+Using cached python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+Using cached google_genai-2.12.1-py3-none-any.whl (1.0 MB)
+Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+Using cached python_jose-3.5.0-py2.py3-none-any.whl (34 kB)
+Using cached email_validator-2.3.0-py3-none-any.whl (35 kB)
+Using cached python_multipart-0.0.32-py3-none-any.whl (30 kB)
+Using cached pytest-9.1.1-py3-none-any.whl (386 kB)
+Using cached pytest_xdist-3.8.0-py3-none-any.whl (46 kB)
+Using cached black-26.5.1-cp312-cp312-macosx_10_13_x86_64.whl (2.0 MB)
+Using cached flake8-7.3.0-py2.py3-none-any.whl (57 kB)
+Using cached isort-8.0.1-py3-none-any.whl (89 kB)
+Using cached pydantic_core-2.46.4-cp312-cp312-macosx_10_12_x86_64.whl (2.1 MB)
+Using cached requests-2.34.2-py3-none-any.whl (73 kB)
+Using cached anyio-4.14.2-py3-none-any.whl (125 kB)
+Using cached charset_normalizer-3.4.9-cp312-cp312-macosx_10_13_universal2.whl (319 kB)
+Using cached distro-1.9.0-py3-none-any.whl (20 kB)
+Using cached google_auth-2.55.2-py3-none-any.whl (256 kB)
+Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+Using cached idna-3.18-py3-none-any.whl (65 kB)
+Using cached mccabe-0.7.0-py2.py3-none-any.whl (7.3 kB)
+Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+Using cached pycodestyle-2.14.0-py2.py3-none-any.whl (31 kB)
+Using cached pyflakes-3.4.0-py2.py3-none-any.whl (63 kB)
+Using cached pytokens-0.4.1-py3-none-any.whl (13 kB)
+Using cached rsa-4.9.1-py3-none-any.whl (34 kB)
+Using cached tenacity-9.1.4-py3-none-any.whl (28 kB)
+Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Using cached urllib3-2.7.0-py3-none-any.whl (131 kB)
+Using cached openai-2.52.0-py3-none-any.whl (1.7 MB)
+Using cached jiter-0.16.0-cp312-cp312-macosx_10_12_x86_64.whl (306 kB)
+Using cached supabase-2.31.0-py3-none-any.whl (16 kB)
+Using cached postgrest-2.31.0-py3-none-any.whl (23 kB)
+Using cached realtime-2.31.0-py3-none-any.whl (22 kB)
+Using cached storage3-2.31.0-py3-none-any.whl (28 kB)
+Using cached supabase_auth-2.31.0-py3-none-any.whl (48 kB)
+Using cached supabase_functions-2.31.0-py3-none-any.whl (8.8 kB)
+Using cached h2-4.4.0-py3-none-any.whl (62 kB)
+Using cached hpack-4.2.0-py3-none-any.whl (34 kB)
+Using cached hyperframe-6.1.0-py3-none-any.whl (13 kB)
+Using cached websockets-15.0.1-cp312-cp312-macosx_10_13_x86_64.whl (173 kB)
+Using cached pillow-12.3.0-cp312-cp312-macosx_10_13_x86_64.whl (5.3 MB)
+Using cached pillow_heif-1.5.0-cp312-cp312-macosx_10_15_x86_64.whl (4.7 MB)
+Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+Using cached click-8.4.2-py3-none-any.whl (119 kB)
+Using cached cffi-2.1.0-cp312-cp312-macosx_10_15_x86_64.whl (184 kB)
+Using cached deprecation-2.1.0-py2.py3-none-any.whl (11 kB)
+Using cached dnspython-2.8.0-py3-none-any.whl (331 kB)
+Using cached ecdsa-0.19.2-py2.py3-none-any.whl (150 kB)
+Using cached execnet-2.1.2-py3-none-any.whl (40 kB)
+Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Using cached iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Using cached mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+Using cached packaging-26.2-py3-none-any.whl (100 kB)
+Using cached pathspec-1.1.1-py3-none-any.whl (57 kB)
+Using cached platformdirs-4.11.0-py3-none-any.whl (23 kB)
+Using cached pyasn1-0.6.4-py3-none-any.whl (84 kB)
+Using cached pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+Using cached pygments-2.20.0-py3-none-any.whl (1.2 MB)
+Using cached pyjwt-2.13.0-py3-none-any.whl (31 kB)
+Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+Using cached StrEnum-0.4.15-py3-none-any.whl (8.9 kB)
+Using cached tqdm-4.70.0-py3-none-any.whl (80 kB)
+Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Using cached yarl-1.24.5-cp312-cp312-macosx_10_13_x86_64.whl (97 kB)
+Using cached multidict-6.7.1-cp312-cp312-macosx_10_13_x86_64.whl (45 kB)
+Using cached propcache-0.5.2-cp312-cp312-macosx_10_13_x86_64.whl (54 kB)
+Using cached pycparser-3.0-py3-none-any.whl (48 kB)
+Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+Building wheels for collected packages: cryptography
+  Building wheel for cryptography (pyproject.toml): started
+  Building wheel for cryptography (pyproject.toml): finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × Building wheel for cryptography (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [186 lines of output]
+      Python reports SOABI: cpython-312-darwin
+      Computed rustc target triple: x86_64-apple-darwin
+      Installation directory: /Users/home/Library/Caches/puccinialin
+      Rustup already downloaded
+      Installing rust to /Users/home/Library/Caches/puccinialin/rustup
+      warn: It looks like you have an existing rustup settings file at:
+      warn: /Users/home/Library/Caches/puccinialin/rustup/settings.toml
+      warn: Rustup will install the default toolchain as specified in the settings file,
+      warn: instead of the one inferred from the default host triple.
+      info: profile set to minimal
+      info: setting default host triple to x86_64-apple-darwin
+      warn: Updating existing toolchain, profile choice will be ignored
+      info: syncing channel updates for stable-x86_64-apple-darwin
+      info: default toolchain set to stable-x86_64-apple-darwin
+      Checking if cargo is installed
+      cargo 1.97.1 (c980f4866 2026-06-30)
+      Rust not found, installing into a temporary directory
+      Running `maturin pep517 build-wheel -i /Users/home/Downloads/Aura2-v2-main/backend/venv/bin/python3.12 --compatibility off`
+      🍹 Building a mixed python/rust project
+      🐍 Found CPython 3.12 at /Users/home/Downloads/Aura2-v2-main/backend/venv/bin/python3.12
+      🔗 Found pyo3 bindings with abi3 support
+      📡 Using build options locked from pyproject.toml
+      💻 Using `MACOSX_DEPLOYMENT_TARGET=10.12` for x86_64-apple-darwin by default
+         Compiling proc-macro2 v1.0.107
+         Compiling unicode-ident v1.0.24
+         Compiling quote v1.0.47
+         Compiling target-lexicon v0.13.5
+         Compiling shlex v2.0.1
+         Compiling find-msvc-tools v0.1.9
+         Compiling cc v1.4.0
+         Compiling pkg-config v0.3.33
+         Compiling vcpkg v0.2.15
+         Compiling pyo3-build-config v0.29.0
+         Compiling libc v0.2.189
+         Compiling syn v2.0.119
+         Compiling openssl-sys v0.9.117
+         Compiling pyo3-ffi v0.29.0
+      warning: openssl-sys@0.9.117: Could not find directory of OpenSSL installation, and this `-sys` crate cannot proceed without this knowledge. If OpenSSL is installed and this crate had trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the compilation process. See stderr section below for further information.
+      error: failed to run custom build command for `openssl-sys v0.9.117`
+      
+      Caused by:
+        process didn't exit successfully: `/private/var/folders/tk/ddjy1jtn1bsczl3yhvh_93480000gn/T/pip-install-8k8rn8m7/cryptography_96fe6fa4f6c846a3b875f49f8e55c3bf/target/release/build/openssl-sys-5226af7becae662e/build-script-main` (exit status: 101)
+        --- stdout
+        cargo:rustc-check-cfg=cfg(osslconf, values("OPENSSL_NO_OCB", "OPENSSL_NO_SM4", "OPENSSL_NO_SEED", "OPENSSL_NO_CHACHA", "OPENSSL_NO_CAST", "OPENSSL_NO_IDEA", "OPENSSL_NO_CAMELLIA", "OPENSSL_NO_RC4", "OPENSSL_NO_BF", "OPENSSL_NO_PSK", "OPENSSL_NO_DEPRECATED_3_0", "OPENSSL_NO_SCRYPT", "OPENSSL_NO_SM3", "OPENSSL_NO_RMD160", "OPENSSL_NO_EC2M", "OPENSSL_NO_OCSP", "OPENSSL_NO_CMS", "OPENSSL_NO_COMP", "OPENSSL_NO_SOCK", "OPENSSL_NO_STDIO", "OPENSSL_NO_EC", "OPENSSL_NO_SSL3_METHOD", "OPENSSL_NO_KRB5", "OPENSSL_NO_TLSEXT", "OPENSSL_NO_SRP", "OPENSSL_NO_SRTP", "OPENSSL_NO_RFC3779", "OPENSSL_NO_SHA", "OPENSSL_NO_NEXTPROTONEG", "OPENSSL_NO_ENGINE", "OPENSSL_NO_BUF_FREELISTS", "OPENSSL_NO_RC2"))
+        cargo:rustc-check-cfg=cfg(openssl)
+        cargo:rustc-check-cfg=cfg(libressl)
+        cargo:rustc-check-cfg=cfg(boringssl)
+        cargo:rustc-check-cfg=cfg(awslc)
+        cargo:rustc-check-cfg=cfg(awslc_pregenerated)
+        cargo:rustc-check-cfg=cfg(libressl250)
+        cargo:rustc-check-cfg=cfg(libressl251)
+        cargo:rustc-check-cfg=cfg(libressl252)
+        cargo:rustc-check-cfg=cfg(libressl261)
+        cargo:rustc-check-cfg=cfg(libressl270)
+        cargo:rustc-check-cfg=cfg(libressl271)
+        cargo:rustc-check-cfg=cfg(libressl273)
+        cargo:rustc-check-cfg=cfg(libressl280)
+        cargo:rustc-check-cfg=cfg(libressl281)
+        cargo:rustc-check-cfg=cfg(libressl291)
+        cargo:rustc-check-cfg=cfg(libressl310)
+        cargo:rustc-check-cfg=cfg(libressl321)
+        cargo:rustc-check-cfg=cfg(libressl332)
+        cargo:rustc-check-cfg=cfg(libressl340)
+        cargo:rustc-check-cfg=cfg(libressl350)
+        cargo:rustc-check-cfg=cfg(libressl360)
+        cargo:rustc-check-cfg=cfg(libressl361)
+        cargo:rustc-check-cfg=cfg(libressl370)
+        cargo:rustc-check-cfg=cfg(libressl380)
+        cargo:rustc-check-cfg=cfg(libressl381)
+        cargo:rustc-check-cfg=cfg(libressl382)
+        cargo:rustc-check-cfg=cfg(libressl390)
+        cargo:rustc-check-cfg=cfg(libressl400)
+        cargo:rustc-check-cfg=cfg(libressl410)
+        cargo:rustc-check-cfg=cfg(libressl420)
+        cargo:rustc-check-cfg=cfg(libressl430)
+        cargo:rustc-check-cfg=cfg(ossl101)
+        cargo:rustc-check-cfg=cfg(ossl102)
+        cargo:rustc-check-cfg=cfg(ossl102f)
+        cargo:rustc-check-cfg=cfg(ossl102h)
+        cargo:rustc-check-cfg=cfg(ossl110)
+        cargo:rustc-check-cfg=cfg(ossl110f)
+        cargo:rustc-check-cfg=cfg(ossl110g)
+        cargo:rustc-check-cfg=cfg(ossl110h)
+        cargo:rustc-check-cfg=cfg(ossl111)
+        cargo:rustc-check-cfg=cfg(ossl111b)
+        cargo:rustc-check-cfg=cfg(ossl111c)
+        cargo:rustc-check-cfg=cfg(ossl111d)
+        cargo:rustc-check-cfg=cfg(ossl300)
+        cargo:rustc-check-cfg=cfg(ossl310)
+        cargo:rustc-check-cfg=cfg(ossl320)
+        cargo:rustc-check-cfg=cfg(ossl330)
+        cargo:rustc-check-cfg=cfg(ossl340)
+        cargo:rustc-check-cfg=cfg(ossl400)
+        cargo:rerun-if-env-changed=X86_64_APPLE_DARWIN_OPENSSL_LIB_DIR
+        X86_64_APPLE_DARWIN_OPENSSL_LIB_DIR unset
+        cargo:rerun-if-env-changed=OPENSSL_LIB_DIR
+        OPENSSL_LIB_DIR unset
+        cargo:rerun-if-env-changed=X86_64_APPLE_DARWIN_OPENSSL_INCLUDE_DIR
+        X86_64_APPLE_DARWIN_OPENSSL_INCLUDE_DIR unset
+        cargo:rerun-if-env-changed=OPENSSL_INCLUDE_DIR
+        OPENSSL_INCLUDE_DIR unset
+        cargo:rerun-if-env-changed=X86_64_APPLE_DARWIN_OPENSSL_DIR
+        X86_64_APPLE_DARWIN_OPENSSL_DIR unset
+        cargo:rerun-if-env-changed=OPENSSL_DIR
+        OPENSSL_DIR unset
+        cargo:rerun-if-env-changed=OPENSSL_NO_PKG_CONFIG
+        cargo:rerun-if-env-changed=PKG_CONFIG_x86_64-apple-darwin
+        cargo:rerun-if-env-changed=PKG_CONFIG_x86_64_apple_darwin
+        cargo:rerun-if-env-changed=HOST_PKG_CONFIG
+        cargo:rerun-if-env-changed=PKG_CONFIG
+        cargo:rerun-if-env-changed=OPENSSL_STATIC
+        cargo:rerun-if-env-changed=OPENSSL_DYNAMIC
+        cargo:rerun-if-env-changed=PKG_CONFIG_ALL_STATIC
+        cargo:rerun-if-env-changed=PKG_CONFIG_ALL_DYNAMIC
+        cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64-apple-darwin
+        cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64_apple_darwin
+        cargo:rerun-if-env-changed=HOST_PKG_CONFIG_PATH
+        cargo:rerun-if-env-changed=PKG_CONFIG_PATH
+        cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64-apple-darwin
+        cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64_apple_darwin
+        cargo:rerun-if-env-changed=HOST_PKG_CONFIG_LIBDIR
+        cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR
+        cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64-apple-darwin
+        cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64_apple_darwin
+        cargo:rerun-if-env-changed=HOST_PKG_CONFIG_SYSROOT_DIR
+        cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR
+        cargo:rerun-if-env-changed=OPENSSL_STATIC
+        cargo:rerun-if-env-changed=OPENSSL_DYNAMIC
+        cargo:rerun-if-env-changed=PKG_CONFIG_ALL_STATIC
+        cargo:rerun-if-env-changed=PKG_CONFIG_ALL_DYNAMIC
+        cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64-apple-darwin
+        cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64_apple_darwin
+        cargo:rerun-if-env-changed=HOST_PKG_CONFIG_PATH
+        cargo:rerun-if-env-changed=PKG_CONFIG_PATH
+        cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64-apple-darwin
+        cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64_apple_darwin
+        cargo:rerun-if-env-changed=HOST_PKG_CONFIG_LIBDIR
+        cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR
+        cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64-apple-darwin
+        cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64_apple_darwin
+        cargo:rerun-if-env-changed=HOST_PKG_CONFIG_SYSROOT_DIR
+        cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR
+      
+      
+        Could not find openssl via pkg-config:
+        Could not run `PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags openssl`
+        The pkg-config command could not be found.
+      
+        Most likely, you need to install a pkg-config package for your OS.
+        Try `brew install pkgconf` if you have Homebrew.
+      
+        If you've already installed it, ensure the pkg-config command is one of the
+        directories in the PATH environment variable.
+      
+        If you did not expect this build to link to a pre-installed system library,
+        then check documentation of the openssl-sys crate for an option to
+        build the library from source, or disable features or dependencies
+        that require pkg-config.
+      
+        cargo:warning=Could not find directory of OpenSSL installation, and this `-sys` crate cannot proceed without this knowledge. If OpenSSL is installed and this crate had trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the compilation process. See stderr section below for further information.
+      
+        --- stderr
+      
+      
+        Could not find directory of OpenSSL installation, and this `-sys` crate cannot
+        proceed without this knowledge. If OpenSSL is installed and this crate had
+        trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the
+        compilation process.
+      
+        Make sure you also have the development packages of openssl installed.
+        For example, `libssl-dev` on Ubuntu or `openssl-devel` on Fedora.
+      
+        If you're in a situation where you think the directory *should* be found
+        automatically, please open a bug at https://github.com/rust-openssl/rust-openssl
+        and include information about your system as well as this message.
+      
+        $HOST = x86_64-apple-darwin
+        $TARGET = x86_64-apple-darwin
+        openssl-sys = 0.9.117
+      
+      
+      warning: build failed, waiting for other jobs to finish...
+      💥 maturin failed
+        Caused by: Failed to build a native library through cargo
+        Caused by: Cargo build finished with "exit status: 101": `env -u CARGO CARGO_ENCODED_RUSTFLAGS="-C\u{1f}link-arg=-undefined\u{1f}-C\u{1f}link-arg=dynamic_lookup" MACOSX_DEPLOYMENT_TARGET="10.12" PYO3_BUILD_EXTENSION_MODULE="1" PYO3_CONFIG_FILE="/private/var/folders/tk/ddjy1jtn1bsczl3yhvh_93480000gn/T/pip-install-8k8rn8m7/cryptography_96fe6fa4f6c846a3b875f49f8e55c3bf/target/maturin/pyo3-config-x86_64-apple-darwin-3.12-abi3.txt" PYO3_ENVIRONMENT_SIGNATURE="cpython-3.12-64bit" PYO3_PYTHON="/Users/home/Downloads/Aura2-v2-main/backend/venv/bin/python3.12" PYTHON_SYS_EXECUTABLE="/Users/home/Downloads/Aura2-v2-main/backend/venv/bin/python3.12" "cargo" "rustc" "--profile" "release" "--message-format" "json-render-diagnostics" "--locked" "--manifest-path" "/private/var/folders/tk/ddjy1jtn1bsczl3yhvh_93480000gn/T/pip-install-8k8rn8m7/cryptography_96fe6fa4f6c846a3b875f49f8e55c3bf/src/rust/Cargo.toml" "--lib" "--" "-C" "link-args=-Wl,-install_name,@rpath/cryptography.hazmat.bindings._rust.abi3.so"`
+      Error: command ['maturin', 'pep517', 'build-wheel', '-i', '/Users/home/Downloads/Aura2-v2-main/backend/venv/bin/python3.12', '--compatibility', 'off'] returned non-zero exit status 1
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building wheel for cryptography
+Failed to build cryptography
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> cryptography

@@ -1,0 +1,22 @@
+{
+  "summary": "First-iteration backend testing for Italian food-recognition NutriSnap app. All 22 checks passed across 8 endpoints including profile computation (BMI/Mifflin-St Jeor), meal CRUD, daily summary, and Gemini 3 Flash food image analysis via Emergent LLM Key.",
+  "tested_scope": ["backend", "integration"],
+  "passed": [
+    "GET /api/ returns NutriSnap healthcheck",
+    "POST /api/profile computes BMI=24.5 (normopeso) and daily_calorie_goal=2133 for male 175cm/75kg/30y/moderato/dimagrire (Mifflin-St Jeor + 1.55 factor - 500 kcal)",
+    "Profile returns all macro goals (protein=160, carbs=213, fat=71, fiber=30)",
+    "GET /api/profile/{device_id} returns saved profile",
+    "GET /api/profile/{device_id} returns null (200) when device not found",
+    "POST /api/analyze-food with real JPEG (Unsplash food photo) returned dish_name='Pizza con pollo BBQ e ananas', total_calories=1040 via gemini-3-flash-preview",
+    "POST /api/meals creates meal with generated id",
+    "GET /api/meals?device_id=&meal_date= returns list of meals",
+    "GET /api/daily-summary returns correct totals (350 kcal, 1 meal) and goals from profile",
+    "DELETE /api/meals/{id} removes meal and returns 404 for non-existent id",
+    "EMERGENT_LLM_KEY loaded correctly and gemini-3-flash-preview integration working"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested (skipped per request)"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

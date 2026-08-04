@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 3 backend testing for NutriSnap v3: EN/IT language support across LLM endpoints and the new 'ingredients' meal-plan preset. Wrote 12 new tests at /app/backend/tests/test_lang_iter3.py covering analyze-food (default/en/it), meal-plan/generate (ingredients+en using chicken/rice/broccoli/olive oil/eggs; bilanciato+en checking meal_type keys remain colazione/pranzo/cena/spuntino; iperproteico+it; no-lang default), coach/recovery (en English statuses, it Italian statuses, no-lang default), coach/program (en), and coach/form-analysis (en, 4 real JPEG frames). 12/12 new tests passed. Also ran the legacy iteration-2 regression suite (10 tests): 9/10 passed on first run; test_recovery_deterministic failed only because it hardcoded Italian status strings while backend default is now 'en'. Updated that legacy test to pass lang='it' explicitly (preserving original intent) and it now passes. Total: 22/22 backend tests passing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_lang_iter3.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/iter3.xml",
+    "/app/test_reports/pytest/iter3_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Localization logic is duplicated: PRESET_DIRECTIVES vs PRESET_DIRECTIVES_EN and two parallel prompt branches per LLM endpoint. Consider a single i18n dict / template layer keyed by lang to reduce drift risk when adding a new language.",
+    "AnalyzeResponse.confidence intentionally uses Italian keys (alta/media/bassa) even in EN responses - documented as intentional but exposes a leaky abstraction to English clients; consider mapping to high/medium/low at serialization time.",
+    "req.lang normalization ('en' if req.lang in ('en','it') else 'en') is repeated 5+ times - extract to a small helper (e.g., normalize_lang(req.lang)) for DRY.",
+    "MealPlanRequest.ingredients has no length cap or per-item length validation; malicious/very long lists could bloat the LLM prompt. Add Field(max_length=40) and per-item constraints.",
+    "server.py continues to grow (~1000 lines); still worth splitting into routers/food.py, routers/meal_plan.py, routers/coach.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lang_iter3.py (new)",
+    "/app/backend/tests/test_backend.py (added lang='it' to test_recovery_deterministic since backend default lang is now 'en')"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "N/A - device_id based (TEST_device_iter2)",
+  "seed_data_creation": "TEST_ prefixed device_id reused from iteration 2; no persistent seed data added beyond ephemeral CRUD entities cleaned up by the tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend now defaults lang='en'. Two test files exist: /app/backend/tests/test_backend.py (regression) and /app/backend/tests/test_lang_iter3.py (EN/IT + ingredients preset). Real JPEGs at /tmp/food.jpg, /tmp/img1.jpg, /tmp/img2.jpg. Language assertions use a keyword-frequency heuristic (IT_MARKERS vs EN_MARKERS) rather than strict equality - robust to LLM variance. meal_type keys in meal plans are intentionally kept as Italian internal keys (colazione/pranzo/cena/spuntino) regardless of lang.",
+  "rca of the issue": "N/A - all endpoints working as designed. Only 'failure' was a stale hardcoded string in an iteration-2 test, now fixed."
+}

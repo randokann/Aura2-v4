@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 2 backend testing for NutriSnap fitness extension. Tested 10 endpoints across regression (root, profile, meals CRUD, daily-summary), meal planning (generate iperproteico/custom, save/list/delete), and fitness coaching (form analysis with real JPEG frames, program generation, deterministic recovery scoring, workouts CRUD sorted desc). All 10/10 passed; recovery test had a single transient LLM upstream 503 that passed cleanly on retry.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/coach/recovery", "issue": "Occasional transient litellm ServiceUnavailableError (upstream connect reset) from Emergent LLM gateway. Retry succeeded. Consider a lightweight retry/backoff wrapper around llm_json for resilience."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iter2.xml"
+  ],
+  "action_items": [
+    "Optional: wrap llm_json with a single automatic retry on 5xx / connection errors to mitigate transient Emergent gateway flakes."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~820 lines and mixes food, meal planning, and coaching domains - consider splitting into routers/modules (food.py, meal_plan.py, coach.py) for maintainability.",
+    "Missing input validation bounds: RecoveryRequest fields (sleep_quality/soreness/energy/stress) accept any int, not enforced 1-10; days_per_week and days lack explicit ge/le. Add Field(ge=..., le=...) to Pydantic models.",
+    "generate_program plateau detection assumes weight_kg is float and ignores exercise name normalization (case-sensitive dict keys).",
+    "extract_json will fail hard on any non-JSON LLM output; there is no fallback response - a bad LLM response causes 500. Consider a stricter prompt or a schema validator with a retry.",
+    "No indexes created in MongoDB for device_id/created_at - listing queries will scale poorly.",
+    "Missing tests directory previously; now created at /app/backend/tests/."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (new)",
+    "/app/backend/tests/test_backend.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "N/A - device_id based",
+  "seed_data_creation": "Test data prefixed TEST_ (device_id=TEST_device_iter2). Created & deleted plans/meals within tests; two TEST_ workouts remain in DB for the test device.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py at /app/backend/tests/test_backend.py uses REACT_APP_BACKEND_URL. LLM calls (meal-plan, coach/program, coach/form-analysis, coach/recovery) can take 15-30s and occasionally hit transient upstream 503 - retry once. Real JPEG images pre-downloaded to /tmp/img1.jpg and /tmp/img2.jpg (unsplash food photos) used for form-analysis frames.",
+  "rca of the issue": "No structural issues found. Single failure was upstream Emergent LLM gateway transient 'upstream connect error or disconnect/reset before headers' - not app code. Retry succeeded."
+}
