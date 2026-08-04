@@ -166,26 +166,15 @@ export const OnboardingDialog = ({ onSubmit }) => {
                     ) : (
                         <Sparkles size={18} className="text-[color:var(--action-primary)]" />
                     )}
-                    <span className="text-xs tracking-overline uppercase text-[color:var(--text-secondary)]">
-                        {t("onboarding.step")} {step + 1} {t("onboarding.of")} {steps.length}
-                    </span>
-                </div>
-
-                <div className="flex gap-1 mb-8">
-                    {steps.map((s, i) => (
-                    <div
-                        key={s.title}
-                        className={`h-1 flex-1 rounded-full transition-colors ${
-                            i <= step ? "bg-[color:var(--action-primary)]" : "bg-[color:var(--ring-track)]"
-                        }`}
-                    />
-                ))}
                 </div>
 
                 <h1 className="font-display text-4xl font-semibold leading-none mb-3">{current.title}</h1>
                 <p className="text-sm text-[color:var(--text-secondary)] mb-8 leading-relaxed">{current.subtitle}</p>
 
                 <div className="flex-1">{current.body}</div>
+
+                {/* Progress indicator moved to bottom of the step, immediately above action buttons */}
+                <ProgressIndicator steps={steps} step={step} />
 
                 <div className="flex gap-3 mt-8">
                     {step > 0 && (
@@ -210,6 +199,19 @@ export const OnboardingDialog = ({ onSubmit }) => {
         </div>
     );
 };
+
+const ProgressIndicator = ({ steps, step }) => (
+    <div className="flex gap-1 mb-8">
+        {steps.map((s, i) => (
+            <div
+                key={s.title}
+                className={`h-1 flex-1 rounded-full transition-colors ${
+                    i <= step ? "bg-[color:var(--action-primary)]" : "bg-[color:var(--ring-track)]"
+                }`}
+            />
+        ))}
+    </div>
+);
 
 const Field = ({ label, children }) => (
     <div>
