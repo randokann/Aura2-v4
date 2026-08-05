@@ -334,6 +334,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
                                         // Use centralized onSubmit so App handles persisting and sign-in flow
                                         const payload = { ...form };
                                         payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+                                        payload.accountMethod = accountMethod;
                                         onSubmit?.(payload);
                                     } else if (accountMethod === 'email') {
                                         openEmailPlaceholder();
@@ -341,6 +342,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
                                         // Guest selected: complete onboarding immediately without authenticating.
                                         const payload = { ...form };
                                         payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+                                        payload.accountMethod = accountMethod;
                                         onSubmit?.(payload);
                                     }
                                 }}
@@ -367,7 +369,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
                         )}
                         <button
                             data-testid={isLast ? "onb-finish" : "onb-next"}
-                            onClick={() => (isLast ? (() => { const payload = { ...form }; payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg); onSubmit(payload); })() : next())}
+                            onClick={() => (isLast ? (() => { const payload = { ...form }; payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg); payload.accountMethod = accountMethod; onSubmit(payload); })() : next())}
                             className="btn-tactile flex-1 py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2"
                         >
                             {isLast ? t("common.finish") : t("common.continue")}
