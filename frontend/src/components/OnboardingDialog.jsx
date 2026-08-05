@@ -18,7 +18,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
         activity_level: "moderato",
         goal: "mantenere",
     });
-    const [accountMethod, setAccountMethod] = useState(null); // 'google' | 'email' | null
+    const [accountMethod, setAccountMethod] = useState(null); // null | 'google' | 'email' | 'guest'
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [emailValue, setEmailValue] = useState("");
     const PENDING_ONBOARDING_KEY = "pending_onboarding_form_v1";
@@ -195,9 +195,9 @@ export const OnboardingDialog = ({ onSubmit }) => {
                 </div>
             ),
         },
-        // New final step: Create your free Aura account
+        // New final step: Choose how you want to continue
         {
-            title: "Create your free Aura account",
+            title: "Choose how you want to continue",
             subtitle: "Sync your workouts, meals and AI coach across all your devices.",
             colorSection: "profilo",
             body: (
@@ -234,6 +234,22 @@ export const OnboardingDialog = ({ onSubmit }) => {
                             <div className="font-medium">Continue with Email</div>
                             <div className={`text-xs ${accountMethod === 'email' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
                                 Create credentials and receive a magic link.
+                            </div>
+                        </button>
+
+                        <button
+                            data-testid="onb-guest"
+                            onClick={() => selectAccount('guest')}
+                            className={`btn-tactile text-left px-4 py-3 rounded-2xl border w-full ${
+                                accountMethod === 'guest'
+                                    ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)] border-transparent"
+                                    : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-primary)]"
+                            }`}
+                        >
+                            <div className="font-medium">Continue without an account</div>
+                            <div className={`text-xs ${accountMethod === 'guest' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
+                                Your data will be stored only on this device.
+                                You can create an account later to sync across devices.
                             </div>
                         </button>
                     </div>
@@ -321,6 +337,9 @@ export const OnboardingDialog = ({ onSubmit }) => {
                                         onSubmit?.(payload);
                                     } else if (accountMethod === 'email') {
                                         openEmailPlaceholder();
+                                    } else if (accountMethod === 'guest') {
+                                        // Guest mode selected: do not submit or call any auth/backend. Just stay in UI state for now.
+                                        return;
                                     }
                                 }}
                                 disabled={!accountMethod}
