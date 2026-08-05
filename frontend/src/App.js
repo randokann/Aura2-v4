@@ -26,6 +26,28 @@ function Shell() {
     const [guestRestored, setGuestRestored] = useState(false);
 
     const loadProfile = useCallback(async () => {
+        // Early guard: if no authenticated user and guest mode is present, restore from localStorage and skip backend.
+        try {
+            if (!user && localStorage.getItem("aura2_guest_mode") === "true") {
+                const raw = localStorage.getItem("aura2_guest_profile");
+                if (raw) {
+                    try {
+                        const guestProfile = JSON.parse(raw);
+                        setProfile(guestProfile);
+                        setShowOnboarding(false);
+                    } catch (e) {
+                        console.warn("Failed to parse aura2_guest_profile in loadProfile:", e);
+                    }
+                }
+                setGuestRestored(true);
+                setLoading(false);
+                return;
+            }
+        } catch (e) {
+            // If any error reading localStorage, fall back to normal backend load.
+            console.warn("Error checking guest mode in loadProfile:", e);
+        }
+
         try {
             const p = await getProfile(getDeviceId());
             setProfile(p);
@@ -47,7 +69,7 @@ function Shell() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [user]);
 
     // Try to restore guest profile if present and there's no authenticated user.
     useEffect(() => {
@@ -239,53 +261,5 @@ function Shell() {
     );
 }
 
-function App() {
 
-console.log("Supabase:", supabase);
-
-useEffect(() => {
-    async function loadUser() {
-
-        const {
-            data: { session },
-        } = await supabase.auth.getSession();
-
-
-        if (!session) {
-            console.log("NO SESSION");
-            return;
-        }
-
-
-        const response = await fetch(
-            "http://127.0.0.1:8000/api/me",
-            {
-                headers: {
-                    Authorization: `Bearer ${session.access_token}`,
-                },
-            }
-        );
-
-
-        console.log("STATUS:", response.status);
-
-        const user = await response.json();
-
-        console.log("AURA USER:", user);
-    }
-
-
-    loadUser();
-
-}, []);
-       
-
-return (
-    <LangProvider>
-        <Shell />
-    </LangProvider>
-);
-
-}
-
-export default App;
+action: applied patch
