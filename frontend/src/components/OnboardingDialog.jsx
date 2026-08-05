@@ -338,8 +338,10 @@ export const OnboardingDialog = ({ onSubmit }) => {
                                     } else if (accountMethod === 'email') {
                                         openEmailPlaceholder();
                                     } else if (accountMethod === 'guest') {
-                                        // Guest mode selected: do not submit or call any auth/backend. Just stay in UI state for now.
-                                        return;
+                                        // Guest selected: complete onboarding immediately without authenticating.
+                                        const payload = { ...form };
+                                        payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+                                        onSubmit?.(payload);
                                     }
                                 }}
                                 disabled={!accountMethod}
