@@ -73,6 +73,31 @@ function Shell() {
     // completed after the auth listener detects a session.
     const finishOnboarding = async (form) => {
         try {
+            // Guest local-only mode: create a local profile and mark guest mode
+            if (form?.accountMethod === "guest") {
+                try {
+                    const guestProfile = { ...form };
+                    // Remove accountMethod before storing
+                    delete guestProfile.accountMethod;
+
+                    try {
+                        localStorage.setItem("aura2_guest_profile", JSON.stringify(guestProfile));
+                        localStorage.setItem("aura2_guest_mode", "true");
+                    } catch (e) {
+                        console.warn("Failed to persist guest profile to localStorage:", e);
+                    }
+
+                    // Update React state to reflect completed onboarding
+                    setProfile(guestProfile);
+                    setShowOnboarding(false);
+                    setTab("fotocamera");
+                    return;
+                } catch (e) {
+                    console.error("Failed to finish onboarding in guest mode:", e);
+                    // Fall through to normal flow if something unexpected happens
+                }
+            }
+
             if (user) {
                 // Authenticated: call saveProfile directly. Do not include device_id —
                 // interceptor will attach Authorization header and backend expects JWT.
