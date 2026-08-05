@@ -23,6 +23,7 @@ function Shell() {
     const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [guestRestored, setGuestRestored] = useState(false);
 
     const loadProfile = useCallback(async () => {
         try {
@@ -48,7 +49,34 @@ function Shell() {
         }
     }, []);
 
-    useEffect(() => { loadProfile(); }, [loadProfile]);
+    // Try to restore guest profile if present and there's no authenticated user.
+    useEffect(() => {
+        // Only run when there is not an authenticated user and we haven't already restored.
+        if (user) return;
+        if (guestRestored) return;
+
+        try {
+            const gm = localStorage.getItem("aura2_guest_mode");
+            if (gm) {
+                const raw = localStorage.getItem("aura2_guest_profile");
+                if (raw) {
+                    try {
+                        const gp = JSON.parse(raw);
+                        setProfile(gp);
+                        setShowOnboarding(false);
+                    } catch (e) {
+                        console.warn("Failed to parse aura2_guest_profile:", e);
+                    }
+                }
+                setGuestRestored(true);
+                setLoading(false);
+            }
+        } catch (e) {
+            console.warn("Failed to restore guest profile:", e);
+        }
+    }, [user, guestRestored]);
+
+    useEffect(() => { if (!guestRestored) loadProfile(); }, [loadProfile, guestRestored]);
 
     useEffect(() => {
     async function migrateDeviceData() {
