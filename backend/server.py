@@ -327,18 +327,66 @@ async def associate_device(req: AssociateRequest, user=Depends(get_current_user)
 
 @api_router.post("/profile", response_model=Profile)
 async def save_profile(p: ProfileInput, user_id: str = Depends(get_current_user_id)):
-    goals = compute_calorie_goal(p)
+    # Defensive fallback: if the incoming payload contains an empty or missing `goal`,
+    # derive it from the provided weights so the downstream logic (calorie/macros)
+    # can continue to work without breaking. This does not change the API contract
+    # or the ProfileInput model — it's purely a runtime safeguard.
+    try:
+        p_dict = p.model_dump()
+    except Exception:
+        # If model_dump is not available for some reason, fallback to attribute access
+        p_dict = {
+            "name": getattr(p, "name", ""),
+            "age": getattr(p, "age", 30),
+            "sex": getattr(p, "sex", "maschio"),
+            "height_cm": getattr(p, "height_cm", 170),
+            "current_weight_kg": getattr(p, "current_weight_kg", 70),
+            "target_weight_kg": getattr(p, "target_weight_kg", 68),
+            "activity_level": getattr(p, "activity_level", "moderato"),
+            "goal": getattr(p, "goal", None),
+        }
+
+    goal_raw = p_dict.get("goal")
+    if goal_raw is None or (isinstance(goal_raw, str) and goal_raw.strip() == ""):
+        # derive goal from weights using the exact logic requested
+        try:
+            cur = float(p_dict.get("current_weight_kg", 0))
+            tgt = float(p_dict.get("target_weight_kg", 0))
+        except Exception:
+            cur = p_dict.get("current_weight_kg", 0)
+            tgt = p_dict.get("target_weight_kg", 0)
+
+        if tgt < cur:
+            derived_goal = "dimagrire"
+        elif tgt > cur:
+            derived_goal = "aumentare"
+        else:
+            derived_goal = "mantenere"
+
+        p_dict["goal"] = derived_goal
+    else:
+        # keep provided goal exactly as-is
+        derived_goal = goal_raw
+
+    # create a validated ProfileInput instance to pass to existing logic
+    try:
+        p_safe = ProfileInput(**p_dict)
+    except Exception:
+        # If validation fails for any reason, fall back to the original `p` object
+        p_safe = p
+
+    goals = compute_calorie_goal(p_safe)
 
     profile_data = {
         "user_id": user_id,
-        "name": p.name or "",
-        "age": p.age,
-        "sex": p.sex,
-        "height_cm": p.height_cm,
-        "current_weight_kg": p.current_weight_kg,
-        "target_weight_kg": p.target_weight_kg,
-        "activity_level": p.activity_level,
-        "goal": p.goal,
+        "name": p_safe.name or "",
+        "age": p_safe.age,
+        "sex": p_safe.sex,
+        "height_cm": p_safe.height_cm,
+        "current_weight_kg": p_safe.current_weight_kg,
+        "target_weight_kg": p_safe.target_weight_kg,
+        "activity_level": p_safe.activity_level,
+        "goal": p_dict.get("goal", getattr(p_safe, "goal", "mantenere")),
         **goals,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
