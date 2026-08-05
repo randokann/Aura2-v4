@@ -27,11 +27,22 @@ export const OnboardingDialog = ({ onSubmit }) => {
     const next = () => setStep((s) => s + 1);
     const back = () => setStep((s) => Math.max(0, s - 1));
 
+    const deriveGoal = (current, target) => {
+        if (target < current) {
+            return "dimagrire";
+        } else if (target > current) {
+            return "aumentare";
+        }
+        return "mantenere";
+    };
+
     const startGoogleAuth = async () => {
         try {
             // Persist pending form so App.finishOnboarding can pick it up on redirect
             try {
-                localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(form));
+                const payload = { ...form };
+                payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+                localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(payload));
             } catch (e) {
                 console.warn("Failed to persist pending onboarding form:", e);
             }
@@ -44,7 +55,9 @@ export const OnboardingDialog = ({ onSubmit }) => {
     const openEmailPlaceholder = () => {
         // Persist pending form so we have it available when the user completes email signup later
         try {
-            localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(form));
+            const payload = { ...form };
+            payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+            localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(payload));
         } catch (e) {
             console.warn("Failed to persist pending onboarding form:", e);
         }
@@ -179,24 +192,6 @@ export const OnboardingDialog = ({ onSubmit }) => {
                             ))}
                         </div>
                     </Field>
-                    <Field label={t("onboarding.goal_label")}>
-                        <div className="grid grid-cols-3 gap-2">
-                            {["dimagrire", "mantenere", "aumentare"].map((g) => (
-                                <button
-                                    key={g}
-                                    data-testid={`onb-goal-${g}`}
-                                    onClick={() => update("goal", g)}
-                                    className={`btn-tactile py-3 rounded-2xl border text-sm ${
-                                        form.goal === g
-                                            ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)] border-transparent"
-                                            : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-primary)]"
-                                    }`}
-                                >
-                                    {t(`goals.${g}`)}
-                                </button>
-                            ))}
-                        </div>
-                    </Field>
                 </div>
             ),
         },
@@ -321,7 +316,9 @@ export const OnboardingDialog = ({ onSubmit }) => {
                                     if (!accountMethod) return;
                                     if (accountMethod === 'google') {
                                         // Use centralized onSubmit so App handles persisting and sign-in flow
-                                        onSubmit?.(form);
+                                        const payload = { ...form };
+                                        payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+                                        onSubmit?.(payload);
                                     } else if (accountMethod === 'email') {
                                         openEmailPlaceholder();
                                     }
@@ -349,7 +346,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
                         )}
                         <button
                             data-testid={isLast ? "onb-finish" : "onb-next"}
-                            onClick={() => (isLast ? onSubmit(form) : next())}
+                            onClick={() => (isLast ? (() => { const payload = { ...form }; payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg); onSubmit(payload); })() : next())}
                             className="btn-tactile flex-1 py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2"
                         >
                             {isLast ? t("common.finish") : t("common.continue")}
