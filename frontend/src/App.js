@@ -13,6 +13,7 @@ import { CoachPage } from "@/pages/CoachPage";
 import { LangProvider, useLang } from "@/i18n/LangContext";
 import { sectionStyle } from "@/lib/sectionColors";
 import { getDeviceId, getProfile, saveProfile, associateDevice } from "@/lib/api";
+import { isGuestMode, getGuestProfile, saveGuestProfile } from "@/lib/guestStorage";
 
 function Shell() {
     const { t } = useLang();
@@ -26,25 +27,20 @@ function Shell() {
     const [guestRestored, setGuestRestored] = useState(false);
 
     const loadProfile = useCallback(async () => {
-        // Early guard: if no authenticated user and guest mode is present, restore from localStorage and skip backend.
+        // Early guard: if no authenticated user and guest mode is present, restore from guest storage and skip backend.
         try {
-            if (!user && localStorage.getItem("aura2_guest_mode") === "true") {
-                const raw = localStorage.getItem("aura2_guest_profile");
-                if (raw) {
-                    try {
-                        const guestProfile = JSON.parse(raw);
-                        setProfile(guestProfile);
-                        setShowOnboarding(false);
-                    } catch (e) {
-                        console.warn("Failed to parse aura2_guest_profile in loadProfile:", e);
-                    }
+            if (!user && isGuestMode()) {
+                const gp = getGuestProfile();
+                if (gp) {
+                    setProfile(gp);
+                    setShowOnboarding(false);
                 }
                 setGuestRestored(true);
                 setLoading(false);
                 return;
             }
         } catch (e) {
-            // If any error reading localStorage, fall back to normal backend load.
+            // If guest storage check fails, fall back to normal backend load.
             console.warn("Error checking guest mode in loadProfile:", e);
         }
 
@@ -78,17 +74,11 @@ function Shell() {
         if (guestRestored) return;
 
         try {
-            const gm = localStorage.getItem("aura2_guest_mode");
-            if (gm) {
-                const raw = localStorage.getItem("aura2_guest_profile");
-                if (raw) {
-                    try {
-                        const gp = JSON.parse(raw);
-                        setProfile(gp);
-                        setShowOnboarding(false);
-                    } catch (e) {
-                        console.warn("Failed to parse aura2_guest_profile:", e);
-                    }
+            if (isGuestMode()) {
+                const gp = getGuestProfile();
+                if (gp) {
+                    setProfile(gp);
+                    setShowOnboarding(false);
                 }
                 setGuestRestored(true);
                 setLoading(false);
@@ -149,12 +139,26 @@ function Shell() {
             }
 
             if (user) {
-                // Authenticated: call saveProfile directly. Do not include device_id —
-                // interceptor will attach Authorization header and backend expects JWT.
-                const p = await saveProfile({ ...form });
-                setProfile(p);
-                setShowOnboarding(false);
-                setTab("fotocamera");
+                // If the app is in guest mode (local-only), save via guest storage instead of backend.
+                if (isGuestMode()) {
+                    try {
+                        const localProfile = { ...form };
+                        delete localProfile.accountMethod; // keep stored shape consistent
+                        saveGuestProfile(localProfile);
+                        setProfile(localProfile);
+                        setShowOnboarding(false);
+                        setTab("fotocamera");
+                    } catch (e) {
+                        console.error("Failed to save guest profile in finishOnboarding:", e);
+                    }
+                } else {
+                    // Authenticated: call saveProfile directly. Do not include device_id —
+                    // interceptor will attach Authorization header and backend expects JWT.
+                    const p = await saveProfile({ ...form });
+                    setProfile(p);
+                    setShowOnboarding(false);
+                    setTab("fotocamera");
+                }
             } else {
                 try {
                     localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(form));
@@ -190,10 +194,24 @@ function Shell() {
                 // Remove early to avoid double-submit
                 localStorage.removeItem(PENDING_ONBOARDING_KEY);
 
-                const p = await saveProfile({ ...pendingForm });
-                setProfile(p);
-                setShowOnboarding(false);
-                setTab("fotocamera");
+                // If the app is in guest mode, persist locally instead of calling backend.
+                if (isGuestMode()) {
+                    try {
+                        const localProfile = { ...pendingForm };
+                        delete localProfile.accountMethod;
+                        saveGuestProfile(localProfile);
+                        setProfile(localProfile);
+                        setShowOnboarding(false);
+                        setTab("fotocamera");
+                    } catch (e) {
+                        console.error("Failed to save guest profile on pending completion:", e);
+                    }
+                } else {
+                    const p = await saveProfile({ ...pendingForm });
+                    setProfile(p);
+                    setShowOnboarding(false);
+                    setTab("fotocamera");
+                }
             } catch (e) {
                 console.error("Failed to complete pending onboarding after sign-in:", e);
             }
@@ -261,5 +279,53 @@ function Shell() {
     );
 }
 
+function App() {
 
-action: applied patch
+console.log("Supabase:", supabase);
+
+useEffect(() => {
+    async function loadUser() {
+
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+
+
+        if (!session) {
+            console.log("NO SESSION");
+            return;
+        }
+
+
+        const response = await fetch(
+            "http://127.0.0.1:8000/api/me",
+            {
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+            }
+        );
+
+
+        console.log("STATUS:", response.status);
+
+        const user = await response.json();
+
+        console.log("AURA USER:", user);
+    }
+
+
+    loadUser();
+
+}, []);
+       
+
+return (
+    <LangProvider>
+        <Shell />
+    </LangProvider>
+);
+
+}
+
+export default App;
