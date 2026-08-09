@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Camera, Upload, X, Check, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { analyzeFood, clarifyFoodAnalysis, createMeal, getDeviceId, todayISO } from "../lib/api";
+import { isGuestMode, addGuestMeal } from "../lib/guestStorage";
 import { useLang } from "../i18n/LangContext";
 import ClarificationModal from "../components/ClarificationModal";
 
@@ -109,7 +110,7 @@ const handleClarification = async (option) => {
         if (!result) return;
         setSaving(true);
         try {
-            const createdMeal = await createMeal({
+            const mealData = {
                 device_id: getDeviceId(),
                 dish_name: result.dish_name,
                 foods: result.foods,
@@ -122,7 +123,11 @@ const handleClarification = async (option) => {
                 meal_date: todayISO(),
                 meal_type: mealType,
                 notes: result.notes || "",
-            });
+            };
+
+            const createdMeal = isGuestMode()
+                ? addGuestMeal(mealData)
+                : await createMeal(mealData);
 
             localStorage.setItem(
                 "aura2_last_added_meal",
@@ -161,7 +166,7 @@ const scanAnimation = `
 
             {!preview && (
                 <div className="mt-8">
-                    <div className="relative aspect-[4/5] rounded-3xl border border-dashed border-white/10 bg-[color:var(--bg-surface)] flex flex-col items-center justify-center p-8 overflow-hidden grain">
+                    <div className="relative aspect-[4/5] rounded-3xl border border-dashed border-white/10 bg-[color:var(--bg-surface)] flex flex-col items-center justify-center p-8 overflow-hidden">
                         <div className="absolute inset-0 opacity-40 pointer-events-none"
                             style={{ background: "radial-gradient(circle at 50% 30%, rgba(224,122,95,0.18), transparent 60%)" }} />
                         <div className="w-20 h-20 rounded-full bg-[color:var(--action-primary)]/15 flex items-center justify-center mb-6">
@@ -315,7 +320,7 @@ const scanAnimation = `
                                 data-testid="btn-save-meal"
                                 disabled={saving || !result.foods?.length}
                                 onClick={saveMeal}
-                                className="btn-tactile w-full py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2 disabled:opacity-40"
+                                className="btn-tactile w-full py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                                 {t("camera.add_to_diary")}
