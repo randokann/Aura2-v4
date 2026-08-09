@@ -130,15 +130,22 @@ function Shell() {
                     // Remove accountMethod before storing
                     delete guestProfile.accountMethod;
 
+                    // Reuse existing local device id as stable anonymous guest identity
+                    // and store it alongside the guest profile in localStorage.
+                    const guestProfileWithIdentity = {
+                        ...guestProfile,
+                        device_id: getDeviceId(),
+                    };
+
                     try {
-                        localStorage.setItem("aura2_guest_profile", JSON.stringify(guestProfile));
+                        localStorage.setItem("aura2_guest_profile", JSON.stringify(guestProfileWithIdentity));
                         localStorage.setItem("aura2_guest_mode", "true");
                     } catch (e) {
                         console.warn("Failed to persist guest profile to localStorage:", e);
                     }
 
                     // Update React state to reflect completed onboarding
-                    setProfile(guestProfile);
+                    setProfile(guestProfileWithIdentity);
                     setShowOnboarding(false);
                     setTab("fotocamera");
                     return;
@@ -270,4 +277,3 @@ function App() {
 }
 
 export default App;
-
