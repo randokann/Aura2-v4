@@ -13,6 +13,65 @@ import { CoachPage } from "@/pages/CoachPage";
 import { LangProvider, useLang } from "@/i18n/LangContext";
 import { sectionStyle } from "@/lib/sectionColors";
 import { getDeviceId, getProfile, saveProfile, associateDevice } from "@/lib/api";
+import { getGuestProfile, saveGuestProfile } from "@/lib/guestStorage";
+
+// Compute derived nutrition/BMI fields from raw profile inputs.
+// Mirrors the logic in ProfilePage.computeProfileGoals so guests always
+// have valid numeric values after onboarding or on restore.
+function ensureGuestProfileGoals(p) {
+    if (
+        p.daily_calorie_goal > 0 &&
+        p.protein_goal > 0 &&
+        p.carbs_goal >= 0 &&
+        p.fat_goal > 0 &&
+        p.bmi > 0
+    ) {
+        return p; // already complete
+    }
+    try {
+        const w = Number(p.current_weight_kg) || 70;
+        const h = Number(p.height_cm) || 170;
+        const age = Number(p.age) || 30;
+        const sex = p.sex || "maschio";
+        const activityFactors = {
+            sedentario: 1.2, leggero: 1.375, moderato: 1.55,
+            intenso: 1.725, molto_intenso: 1.9,
+        };
+        const factor = activityFactors[p.activity_level] ?? 1.55;
+        const bmr = sex === "maschio"
+            ? 10 * w + 6.25 * h - 5 * age + 5
+            : 10 * w + 6.25 * h - 5 * age - 161;
+        const tdee = bmr * factor;
+        const diff = (Number(p.target_weight_kg) || w) - w;
+        let cal = p.goal === "dimagrire" || diff < -0.5
+            ? tdee - 500
+            : p.goal === "aumentare" || diff > 0.5
+                ? tdee + 400
+                : tdee;
+        cal = Math.max(1200, Math.round(cal));
+        const protMult = p.goal === "dimagrire" ? 1.8 : p.goal === "aumentare" ? 1.7 : 1.6;
+        const prot = Math.round(w * protMult);
+        const fat = Math.round(w * 0.8);
+        const carbs = Math.max(0, Math.round((cal - prot * 4 - fat * 9) / 4));
+        const fiber = sex === "maschio" ? 30 : 25;
+        const hm = h / 100;
+        const bmi = Math.round((w / (hm * hm)) * 10) / 10;
+        const bmi_category = bmi < 18.5 ? "underweight" : bmi < 25 ? "normal" : bmi < 30 ? "overweight" : "obese";
+        return {
+            ...p,
+            daily_calorie_goal: cal,
+            protein_goal: prot,
+            carbs_goal: carbs,
+            fat_goal: fat,
+            fiber_goal: fiber,
+            bmi,
+            bmi_category,
+        };
+    } catch (e) {
+        console.warn("ensureGuestProfileGoals failed:", e);
+        return p;
+    }
+}
 
 function Shell() {
     const { t } = useLang();
@@ -23,35 +82,43 @@ function Shell() {
     const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
     const [showOnboarding, setShowOnboarding] = useState(false);
-    const [guestRestored, setGuestRestored] = useState(false);
+
+    const restoreGuestProfile = useCallback(() => {
+        if (user) return false;
+
+        try {
+            if (localStorage.getItem("aura2_guest_mode") !== "true") {
+                return false;
+            }
+
+            const raw = getGuestProfile();
+            if (!raw || typeof raw !== "object") {
+                return false;
+            }
+            const guestProfile = ensureGuestProfileGoals(raw);
+            // Persist back if we had to fill in missing derived fields
+            if (guestProfile !== raw) {
+                saveGuestProfile(guestProfile);
+            }
+            setProfile(guestProfile);
+            setShowOnboarding(false);
+            setLoading(false);
+            return true;
+        } catch (e) {
+            console.warn("Failed to restore guest profile:", e);
+            return false;
+        }
+    }, [user]);
 
     const loadProfile = useCallback(async () => {
-        // Early guard: if no authenticated user and guest mode is present, restore from localStorage and skip backend.
-        try {
-            if (!user && localStorage.getItem("aura2_guest_mode") === "true") {
-                const raw = localStorage.getItem("aura2_guest_profile");
-                if (raw) {
-                    try {
-                        const guestProfile = JSON.parse(raw);
-                        setProfile(guestProfile);
-                        setShowOnboarding(false);
-                    } catch (e) {
-                        console.warn("Failed to parse aura2_guest_profile in loadProfile:", e);
-                    }
-                }
-                setGuestRestored(true);
-                setLoading(false);
-                return;
-            }
-        } catch (e) {
-            // If any error reading localStorage, fall back to normal backend load.
-            console.warn("Error checking guest mode in loadProfile:", e);
+        if (restoreGuestProfile()) {
+            return;
         }
 
         try {
             const p = await getProfile(getDeviceId());
             setProfile(p);
-            if (!p) setShowOnboarding(true);
+            setShowOnboarding(!p);
         } catch (e) {
             console.error("Failed to load profile:", e);
             // If the backend requires authentication (401), we should show onboarding
@@ -69,36 +136,12 @@ function Shell() {
         } finally {
             setLoading(false);
         }
-    }, [user]);
+    }, [restoreGuestProfile]);
 
-    // Try to restore guest profile if present and there's no authenticated user.
     useEffect(() => {
-        // Only run when there is not an authenticated user and we haven't already restored.
-        if (user) return;
-        if (guestRestored) return;
-
-        try {
-            const gm = localStorage.getItem("aura2_guest_mode");
-            if (gm) {
-                const raw = localStorage.getItem("aura2_guest_profile");
-                if (raw) {
-                    try {
-                        const gp = JSON.parse(raw);
-                        setProfile(gp);
-                        setShowOnboarding(false);
-                    } catch (e) {
-                        console.warn("Failed to parse aura2_guest_profile:", e);
-                    }
-                }
-                setGuestRestored(true);
-                setLoading(false);
-            }
-        } catch (e) {
-            console.warn("Failed to restore guest profile:", e);
-        }
-    }, [user, guestRestored]);
-
-    useEffect(() => { if (!guestRestored) loadProfile(); }, [loadProfile, guestRestored]);
+        if (authLoading) return;
+        loadProfile();
+    }, [authLoading, loadProfile]);
 
     useEffect(() => {
     async function migrateDeviceData() {
@@ -131,19 +174,23 @@ function Shell() {
                     delete guestProfile.accountMethod;
 
                     // Reuse existing local device id as stable anonymous guest identity
-                    // and store it alongside the guest profile in localStorage.
-                    const guestProfileWithIdentity = {
+                    // and ensure derived nutrition/BMI fields are always populated.
+                    const guestProfileWithIdentity = ensureGuestProfileGoals({
                         ...guestProfile,
                         device_id: getDeviceId(),
-                    };
+                    });
 
                     try {
-                        localStorage.setItem("aura2_guest_profile", JSON.stringify(guestProfileWithIdentity));
+                        const saved = saveGuestProfile(guestProfileWithIdentity);
+                        if (!saved) {
+                            console.warn("Failed to persist guest profile to localStorage.");
+                            return;
+                        }
                         localStorage.setItem("aura2_guest_mode", "true");
                     } catch (e) {
                         console.warn("Failed to persist guest profile to localStorage:", e);
+                        return;
                     }
-
                     // Update React state to reflect completed onboarding
                     setProfile(guestProfileWithIdentity);
                     setShowOnboarding(false);

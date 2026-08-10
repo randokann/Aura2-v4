@@ -8,6 +8,8 @@ import {
     analyzeExerciseForm, generateProgram, estimateRecovery,
     logWorkout, listWorkouts, getDeviceId, todayISO,
 } from "../lib/api";
+import { useAuth } from "../auth/AuthProvider";
+import { isGuestMode, addGuestWorkout, getGuestWorkouts, deleteGuestWorkout } from "../lib/guestStorage";
 import { useLang } from "../i18n/LangContext";
 
 export const CoachPage = () => {
@@ -404,27 +406,49 @@ const RecoverySection = () => {
 
 const WorkoutLogSection = () => {
     const { t } = useLang();
+    const { user } = useAuth();
+    const guestMode = !user && isGuestMode();
     const [form, setForm] = useState({ exercise: "", sets: 3, reps: 10, weight_kg: 0, duration_min: 0, notes: "" });
     const [logs, setLogs] = useState([]);
     const [saving, setSaving] = useState(false);
     const upd = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
-    const load = useCallback(async () => {
-        try { setLogs(await listWorkouts(getDeviceId())); }
-        catch (e) { console.error("List workouts failed:", e); }
-    }, []);
+    const load = useCallback(() => {
+        if (guestMode) {
+            setLogs(getGuestWorkouts());
+            return;
+        }
+        listWorkouts(getDeviceId())
+            .then(setLogs)
+            .catch((e) => console.error("List workouts failed:", e));
+    }, [guestMode]);
     useEffect(() => { load(); }, [load]);
 
     const submit = async () => {
         if (!form.exercise.trim()) { toast.error(t("coach.log.need_name")); return; }
         setSaving(true);
         try {
-            await logWorkout({ device_id: getDeviceId(), ...form, log_date: todayISO() });
+            if (guestMode) {
+                const workout = addGuestWorkout({ ...form, log_date: todayISO() });
+                if (!workout) { toast.error("Error"); return; }
+            } else {
+                await logWorkout({ device_id: getDeviceId(), ...form, log_date: todayISO() });
+            }
             toast.success(t("coach.log.logged"));
             setForm({ exercise: "", sets: 3, reps: 10, weight_kg: 0, duration_min: 0, notes: "" });
             load();
         } catch { toast.error("Error"); }
         finally { setSaving(false); }
+    };
+
+    const onDelete = (id) => {
+        if (guestMode) {
+            deleteGuestWorkout(id);
+            load();
+            return;
+        }
+        // Authenticated delete is not exposed in this section's UI currently;
+        // kept as a no-op guard for future use.
     };
 
     const byExercise = {};
@@ -484,6 +508,15 @@ const WorkoutLogSection = () => {
                             <div className="font-display">{l.sets}×{l.reps}</div>
                             {l.weight_kg > 0 && <div className="text-[10px] text-[color:var(--text-secondary)]">{l.weight_kg} kg</div>}
                         </div>
+                        {guestMode && (
+                            <button
+                                data-testid={`delete-coach-workout-${l.id}`}
+                                onClick={() => onDelete(l.id)}
+                                className="btn-tactile p-2 rounded-full text-[color:var(--text-secondary)] hover:text-[color:var(--macro-protein)] ml-2"
+                            >
+                                <Dumbbell size={14} className="opacity-50" />
+                            </button>
+                        )}
                     </div>
                 ))}
             </div>

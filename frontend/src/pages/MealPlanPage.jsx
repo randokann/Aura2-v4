@@ -4,6 +4,7 @@ import { Loader2, Sparkles, ChefHat, Trash2, Save, Wand2, Plus, X, Camera } from
 import {
     generateMealPlan, saveMealPlan, listMealPlans, deleteMealPlan, getDeviceId, extractPantry,
 } from "../lib/api";
+import { useAuth } from "../auth/AuthProvider";
 import { useLang } from "../i18n/LangContext";
 import { COMMON_INGREDIENTS } from "../i18n/translations";
 import { isGuestMode, getGuestMealPlans, addGuestMealPlan, deleteGuestMealPlan } from "../lib/guestStorage";
@@ -12,6 +13,8 @@ const PRESETS = ["bilanciato", "iperproteico", "ipocalorico", "ipercalorico", "k
 
 export const MealPlanPage = () => {
     const { t, lang } = useLang();
+    const { user } = useAuth();
+    const guestMode = !user && isGuestMode();
     const [preset, setPreset] = useState("bilanciato");
     const [days, setDays] = useState(3);
     const [customPrompt, setCustomPrompt] = useState("");
@@ -28,13 +31,13 @@ export const MealPlanPage = () => {
 
     const loadSaved = useCallback(async () => {
         try {
-            if (isGuestMode()) {
+            if (guestMode) {
                 setSaved(getGuestMealPlans() || []);
             } else {
                 setSaved(await listMealPlans(getDeviceId()));
             }
         } catch (e) { console.error("List meal plans failed:", e); }
-    }, []);
+    }, [guestMode]);
     useEffect(() => { loadSaved(); }, [loadSaved]);
 
     const addIngredient = (name) => {
@@ -83,6 +86,10 @@ export const MealPlanPage = () => {
     const generate = async () => {
         if (preset === "custom" && !customPrompt.trim()) { toast.error(t("plans.need_custom")); return; }
         if (preset === "ingredients" && ingredients.length === 0) { toast.error(t("plans.need_ingredients")); return; }
+        if (guestMode) {
+            toast.error("Meal plan generation currently requires an account.");
+            return;
+        }
         setGenerating(true);
         setPlan(null);
         try {
@@ -105,28 +112,36 @@ export const MealPlanPage = () => {
     const savePlan = async () => {
         if (!plan) return;
         try {
-            if (isGuestMode()) {
-                addGuestMealPlan({ ...plan, preset });
+            if (guestMode) {
+                const savedPlan = addGuestMealPlan({ ...plan, preset });
+                if (!savedPlan) {
+                    toast.error("Error");
+                    return;
+                }
                 toast.success(t("common.save"));
-                loadSaved();
+                await loadSaved();
             } else {
                 await saveMealPlan({ device_id: getDeviceId(), ...plan, preset });
                 toast.success(t("common.save"));
-                loadSaved();
+                await loadSaved();
             }
         } catch { toast.error("Error"); }
     };
 
     const onDelete = async (id) => {
         try {
-            if (isGuestMode()) {
-                deleteGuestMealPlan(id);
+            if (guestMode) {
+                const deleted = deleteGuestMealPlan(id);
+                if (!deleted) {
+                    toast.error("Error");
+                    return;
+                }
                 toast.success(t("plans.deleted"));
-                loadSaved();
+                await loadSaved();
             } else {
                 await deleteMealPlan(id, getDeviceId());
                 toast.success(t("plans.deleted"));
-                loadSaved();
+                await loadSaved();
             }
         }
         catch { toast.error("Error"); }

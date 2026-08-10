@@ -3,10 +3,38 @@ import { Trash2, Utensils, Flame, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { ProgressRing, MacroBar } from "../components/ProgressRing";
 import { dailySummary, deleteMeal, deleteWorkout, getDeviceId, listMeals, listWorkouts, todayISO } from "../lib/api";
+import { isGuestMode, getGuestMeals, deleteGuestMeal, getGuestWorkouts, deleteGuestWorkout } from "../lib/guestStorage";
+import { useAuth } from "../auth/AuthProvider";
 import { useLang } from "../i18n/LangContext";
+
+function buildDiaryGoals(profile) {
+    return {
+        calories: profile?.daily_calorie_goal || 2000,
+        protein: profile?.protein_goal || 120,
+        carbs: profile?.carbs_goal || 250,
+        fat: profile?.fat_goal || 65,
+        fiber: profile?.fiber_goal || 30,
+    };
+}
+
+function buildGuestSummary(meals, mealDate, profile) {
+    return {
+        totals: {
+            calories: meals.reduce((sum, meal) => sum + (meal?.total_calories || 0), 0),
+            protein: meals.reduce((sum, meal) => sum + (meal?.total_protein || 0), 0),
+            carbs: meals.reduce((sum, meal) => sum + (meal?.total_carbs || 0), 0),
+            fat: meals.reduce((sum, meal) => sum + (meal?.total_fat || 0), 0),
+            fiber: meals.reduce((sum, meal) => sum + (meal?.total_fiber || 0), 0),
+            meal_count: meals.length,
+        },
+        goals: buildDiaryGoals(profile),
+        meal_date: mealDate,
+    };
+}
 
 export const DiaryPage = ({ profile, refreshKey }) => {
     const { t, lang } = useLang();
+    const { user } = useAuth();
 const [summary, setSummary] = useState(() => {
     const saved = localStorage.getItem("aura2_last_summary");
     return saved ? JSON.parse(saved) : null;
@@ -18,11 +46,32 @@ const [summary, setSummary] = useState(() => {
 
     const load = useCallback(async () => {
         console.log("DIARY LOAD", Date.now());
+        setLoading(true);
 
     try {
             const start = performance.now();
-            const deviceId = getDeviceId();
             const today = todayISO();
+            const guestMode = !user && isGuestMode();
+
+            if (guestMode) {
+                const guestMeals = getGuestMeals()
+                    .filter((meal) => meal?.meal_date === today)
+                    .reverse();
+                const guestWorkouts = getGuestWorkouts()
+                    .filter((w) => w?.log_date === today);
+                const guestSummary = buildGuestSummary(guestMeals, today, profile);
+
+                setSummary(guestSummary);
+                localStorage.setItem("aura2_last_summary", JSON.stringify(guestSummary));
+                setHasLoadedSummary(true);
+                setMeals(guestMeals);
+                setWorkouts(guestWorkouts);
+                localStorage.removeItem("aura2_last_added_meal");
+                console.log("Total load:", performance.now() - start);
+                return;
+            }
+
+            const deviceId = getDeviceId();
             const cachedMeal = localStorage.getItem("aura2_last_added_meal");
 
 if (cachedMeal) {
@@ -54,12 +103,30 @@ console.log("Total load:", performance.now() - start);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [profile, user]);
 
     useEffect(() => { load(); }, [load, refreshKey]);
 
     const onDelete = async (id) => {
         try {
+            if (!user && isGuestMode()) {
+                const deleted = deleteGuestMeal(id);
+                if (!deleted) {
+                    return;
+                }
+
+                const today = todayISO();
+                const guestMeals = getGuestMeals()
+                    .filter((meal) => meal?.meal_date === today)
+                    .reverse();
+                const guestSummary = buildGuestSummary(guestMeals, today, profile);
+
+                setMeals(guestMeals);
+                setSummary(guestSummary);
+                localStorage.setItem("aura2_last_summary", JSON.stringify(guestSummary));
+                return;
+            }
+
             await deleteMeal(id, getDeviceId());
             load();
         } catch (e) {
@@ -68,13 +135,19 @@ console.log("Total load:", performance.now() - start);
     };
 
     const onDeleteWorkout = async (id) => {
-    try {
-        await deleteWorkout(id, getDeviceId());
-        load();
-    } catch (e) {
-        console.error("Delete workout failed:", e);
-    }
-};
+        try {
+            if (!user && isGuestMode()) {
+                deleteGuestWorkout(id);
+                const today = todayISO();
+                setWorkouts(getGuestWorkouts().filter((w) => w?.log_date === today));
+                return;
+            }
+            await deleteWorkout(id, getDeviceId());
+            load();
+        } catch (e) {
+            console.error("Delete workout failed:", e);
+        }
+    };
 
     const totals = summary?.totals || {
     calories: 0,
@@ -83,13 +156,7 @@ console.log("Total load:", performance.now() - start);
     fat: 0,
     fiber: 0,
 };
-    const goals = summary?.goals || {
-        calories: profile?.daily_calorie_goal || 2000,
-        protein: profile?.protein_goal || 120,
-        carbs: profile?.carbs_goal || 250,
-        fat: profile?.fat_goal || 65,
-        fiber: profile?.fiber_goal || 30,
-    };
+    const goals = summary?.goals || buildDiaryGoals(profile);
 
     const remaining = Math.max(0, goals.calories - totals.calories);
 

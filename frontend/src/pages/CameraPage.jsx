@@ -3,6 +3,7 @@ import { Camera, Upload, X, Check, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { analyzeFood, clarifyFoodAnalysis, createMeal, getDeviceId, todayISO } from "../lib/api";
 import { isGuestMode, addGuestMeal } from "../lib/guestStorage";
+import { useAuth } from "../auth/AuthProvider";
 import { useLang } from "../i18n/LangContext";
 import ClarificationModal from "../components/ClarificationModal";
 
@@ -33,6 +34,7 @@ async function fileToBase64(file) {
 
 export const CameraPage = ({ onSaved }) => {
     const { t } = useLang();
+    const { user } = useAuth();
     const fileRef = useRef(null);
     const galleryRef = useRef(null);
     const [preview, setPreview] = useState(null);
@@ -44,6 +46,7 @@ export const CameraPage = ({ onSaved }) => {
     const [mealType, setMealType] = useState(guessMealType());
     const [saving, setSaving] = useState(false);
     const [selectedOption, setSelectedOption] = useState(null);
+    const guestMode = !user && isGuestMode();
 
     const reset = () => { setPreview(null); setBase64(null); setResult(null); setAnalyzing(false); };
 
@@ -125,14 +128,18 @@ const handleClarification = async (option) => {
                 notes: result.notes || "",
             };
 
-            const createdMeal = isGuestMode()
+            const createdMeal = guestMode
                 ? addGuestMeal(mealData)
                 : await createMeal(mealData);
 
-            localStorage.setItem(
-                "aura2_last_added_meal",
-                JSON.stringify(createdMeal)
-            );
+            // Only cache for authenticated users — DiaryPage reads guest meals
+            // directly from aura2_guest_meals so the cache is not needed there.
+            if (!guestMode && createdMeal) {
+                localStorage.setItem(
+                    "aura2_last_added_meal",
+                    JSON.stringify(createdMeal)
+                );
+            }
 
             toast.success(t("camera.saved"));
             reset();

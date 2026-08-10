@@ -2,11 +2,83 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Save, Activity, Target, Ruler, Scale, Languages } from "lucide-react";
 import { saveProfile, getDeviceId } from "../lib/api";
+import { isGuestMode, getGuestProfile, saveGuestProfile } from "../lib/guestStorage";
+import { useAuth } from "../auth/AuthProvider";
 import { useLang } from "../i18n/LangContext";
 import { LANGUAGES } from "../i18n/languages";
 
+function computeBmi(weightKg, heightCm) {
+    const heightM = heightCm / 100;
+    const bmi = roundTo(weightKg / (heightM ** 2), 1);
+
+    if (bmi < 18.5) {
+        return { bmi, bmi_category: "underweight" };
+    }
+    if (bmi < 25) {
+        return { bmi, bmi_category: "normal" };
+    }
+    if (bmi < 30) {
+        return { bmi, bmi_category: "overweight" };
+    }
+    return { bmi, bmi_category: "obese" };
+}
+
+function computeProfileGoals(form) {
+    const bmr = form.sex === "maschio"
+        ? 10 * form.current_weight_kg + 6.25 * form.height_cm - 5 * form.age + 5
+        : 10 * form.current_weight_kg + 6.25 * form.height_cm - 5 * form.age - 161;
+
+    const factors = {
+        sedentario: 1.2,
+        leggero: 1.375,
+        moderato: 1.55,
+        intenso: 1.725,
+        molto_intenso: 1.9,
+    };
+
+    const tdee = bmr * factors[form.activity_level];
+    const diff = form.target_weight_kg - form.current_weight_kg;
+
+    let calorieGoal;
+    if (form.goal === "dimagrire" || diff < -0.5) {
+        calorieGoal = tdee - 500;
+    } else if (form.goal === "aumentare" || diff > 0.5) {
+        calorieGoal = tdee + 400;
+    } else {
+        calorieGoal = tdee;
+    }
+
+    calorieGoal = Math.max(1200, Math.round(calorieGoal));
+
+    const proteinMultiplier = form.goal === "dimagrire"
+        ? 1.8
+        : form.goal === "aumentare"
+            ? 1.7
+            : 1.6;
+
+    const proteinGoal = Math.round(form.current_weight_kg * proteinMultiplier);
+    const fatGoal = Math.round(form.current_weight_kg * 0.8);
+    const remainingCalories = calorieGoal - (proteinGoal * 4) - (fatGoal * 9);
+    const carbsGoal = remainingCalories < 0 ? 0 : Math.round(remainingCalories / 4);
+    const fiberGoal = form.sex === "maschio" ? 30 : 25;
+
+    return {
+        daily_calorie_goal: calorieGoal,
+        protein_goal: proteinGoal,
+        carbs_goal: carbsGoal,
+        fat_goal: fatGoal,
+        fiber_goal: fiberGoal,
+        ...computeBmi(form.current_weight_kg, form.height_cm),
+    };
+}
+
+function roundTo(value, decimals) {
+    return Number(value.toFixed(decimals));
+}
+
 export const ProfilePage = ({ profile, onUpdated }) => {
     const { t, lang, setLang } = useLang();
+    const { user } = useAuth();
     const [form, setForm] = useState({
         name: profile?.name || "",
         age: profile?.age || 30,
@@ -23,6 +95,27 @@ export const ProfilePage = ({ profile, onUpdated }) => {
     const save = async () => {
         setSaving(true);
         try {
+            const guestMode = !user && isGuestMode();
+
+            if (guestMode) {
+                const existingGuestProfile = getGuestProfile() || profile || {};
+                const updatedGuestProfile = {
+                    ...existingGuestProfile,
+                    ...form,
+                    ...computeProfileGoals(form),
+                };
+
+                const saved = saveGuestProfile(updatedGuestProfile);
+                if (!saved) {
+                    toast.error("Error");
+                    return;
+                }
+                localStorage.setItem("aura2_guest_mode", "true");
+                toast.success(t("profile.updated"));
+                onUpdated?.(updatedGuestProfile);
+                return;
+            }
+
             const u = await saveProfile({ device_id: getDeviceId(), ...form });
             toast.success(t("profile.updated"));
             onUpdated?.(u);
