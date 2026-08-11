@@ -172,7 +172,287 @@ export const MealPlanPage = () => {
                 ))}
             </div>
 
-            {/* The rest of the UI unchanged... */}
+            {tab === "nuovo" && (
+                <>
+                    <div className="space-y-5">
+                        <div>
+                            <label className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] block mb-2">
+                                {t("plans.type")}
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {PRESETS.map((p) => (
+                                    <button
+                                        key={p}
+                                        data-testid={`preset-${p}`}
+                                        onClick={() => setPreset(p)}
+                                        className={`btn-tactile px-3 py-2.5 rounded-2xl text-xs font-medium ${
+                                            preset === p
+                                                ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)]"
+                                                : "bg-[color:var(--bg-elevated)]"
+                                        }`}
+                                    >
+                                        {t(`presets.${p}`)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {preset === "custom" && (
+                            <div>
+                                <label className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] block mb-2">{t("plans.describe")}</label>
+                                <textarea
+                                    data-testid="plan-custom"
+                                    value={customPrompt}
+                                    onChange={(e) => setCustomPrompt(e.target.value)}
+                                    placeholder={t("plans.describe_ph")}
+                                    rows={4}
+                                    className="w-full bg-[color:var(--bg-elevated)] rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-[color:var(--action-primary)] resize-none"
+                                />
+                            </div>
+                        )}
+
+                        {preset === "ingredients" && (
+                            <div className="glass rounded-3xl p-5 space-y-4">
+                                <div>
+                                    <div className="text-[10px] tracking-overline uppercase text-[color:var(--action-primary)] flex items-center gap-1 mb-1">
+                                        <Sparkles size={10} /> {t("plans.ingredients_title")}
+                                    </div>
+                                    <p className="text-xs text-[color:var(--text-secondary)] leading-relaxed">{t("plans.ingredients_hint")}</p>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <input
+                                        data-testid="ingredient-input"
+                                        value={ingredientInput}
+                                        onChange={(e) => setIngredientInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addIngredient(ingredientInput); } }}
+                                        placeholder={t("plans.ingredient_ph")}
+                                        className="flex-1 bg-[color:var(--bg-elevated)] rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-[color:var(--action-primary)] text-sm"
+                                    />
+                                    <button
+                                        data-testid="btn-add-ingredient"
+                                        onClick={() => addIngredient(ingredientInput)}
+                                        className="btn-tactile px-4 rounded-2xl bg-[color:var(--action-primary)] text-[color:var(--bg-default)] flex items-center gap-1"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                </div>
+
+                                <input
+                                    ref={pantryFileRef}
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    hidden
+                                    onChange={(e) => onPantryFile(e.target.files?.[0])}
+                                />
+                                <button
+                                    data-testid="btn-scan-pantry"
+                                    onClick={() => pantryFileRef.current?.click()}
+                                    disabled={scanningPantry}
+                                    className="btn-tactile w-full py-3 rounded-2xl border border-dashed border-[color:var(--action-primary)]/50 bg-[color:var(--action-primary)]/10 text-[color:var(--action-primary)] flex items-center justify-center gap-2 disabled:opacity-60"
+                                >
+                                    {scanningPantry ? <Loader2 className="animate-spin" size={16} /> : <Camera size={16} />}
+                                    <span className="text-sm font-medium">
+                                        {scanningPantry ? t("plans.scanning_pantry") : t("plans.scan_pantry")}
+                                    </span>
+                                </button>
+
+                                {ingredients.length > 0 && (
+                                    <div data-testid="ingredients-chips" className="flex flex-wrap gap-2">
+                                        {ingredients.map((ing) => (
+                                            <span
+                                                key={ing}
+                                                className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full bg-[color:var(--action-primary)]/20 text-[color:var(--action-primary)] text-xs font-medium"
+                                            >
+                                                {ing}
+                                                <button
+                                                    data-testid={`remove-ing-${ing}`}
+                                                    onClick={() => removeIngredient(ing)}
+                                                    className="hover:text-[color:var(--text-primary)]"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div>
+                                    <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] mb-2">{t("plans.common")}</div>
+                                    <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto no-scrollbar">
+                                        {commonList.map((ing) => {
+                                            const selected = ingredients.some((i) => i.toLowerCase() === ing.toLowerCase());
+                                            return (
+                                                <button
+                                                    key={ing}
+                                                    data-testid={`common-${ing}`}
+                                                    onClick={() => selected ? removeIngredient(ingredients.find((i) => i.toLowerCase() === ing.toLowerCase())) : addIngredient(ing)}
+                                                    className={`btn-tactile px-3 py-1.5 rounded-full text-xs border ${
+                                                        selected
+                                                            ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)] border-transparent"
+                                                            : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-secondary)]"
+                                                    }`}
+                                                >
+                                                    {ing}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] block mb-2">{t("plans.days")}</label>
+                                <div className="grid grid-cols-4 gap-1">
+                                    {[1, 3, 5, 7].map((d) => (
+                                        <button
+                                            key={d}
+                                            data-testid={`plan-days-${d}`}
+                                            onClick={() => setDays(d)}
+                                            className={`btn-tactile py-2.5 rounded-xl text-sm font-medium ${
+                                                days === d ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)]" : "bg-[color:var(--bg-elevated)]"
+                                            }`}
+                                        >{d}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] block mb-2">{t("plans.kcal_opt")}</label>
+                                <input
+                                    data-testid="plan-kcal"
+                                    value={targetKcal}
+                                    onChange={(e) => setTargetKcal(e.target.value)}
+                                    placeholder={t("plans.auto")}
+                                    inputMode="numeric"
+                                    className="w-full bg-[color:var(--bg-elevated)] rounded-2xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-[color:var(--action-primary)] text-center"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)] block mb-2">{t("plans.allergies")}</label>
+                            <input
+                                data-testid="plan-allergies"
+                                value={allergies}
+                                onChange={(e) => setAllergies(e.target.value)}
+                                placeholder={t("plans.allergies_ph")}
+                                className="w-full bg-[color:var(--bg-elevated)] rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-[color:var(--action-primary)]"
+                            />
+                        </div>
+
+                        <button
+                            data-testid="btn-generate-plan"
+                            disabled={generating}
+                            onClick={generate}
+                            className="btn-tactile w-full py-4 rounded-full bg-[color:var(--action-primary)] text-[color:var(--bg-default)] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {generating ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
+                            {generating ? t("common.generating") : t("plans.generate")}
+                        </button>
+                    </div>
+
+                    {plan && (
+                        <div data-testid="generated-plan" className="mt-8 space-y-4">
+                            <div className="glass rounded-3xl p-5">
+                                <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div>
+                                        <div className="text-[10px] tracking-overline uppercase text-[color:var(--action-primary)] flex items-center gap-1">
+                                            <Sparkles size={10} /> {t("plans.ai_gen")}
+                                        </div>
+                                        <h2 className="font-display text-2xl mt-1 leading-tight">{plan.title}</h2>
+                                    </div>
+                                    <button
+                                        data-testid="btn-save-plan"
+                                        onClick={savePlan}
+                                        className="btn-tactile px-3 py-2 rounded-full bg-[color:var(--bg-elevated)] text-xs flex items-center gap-1"
+                                    >
+                                        <Save size={12} /> {t("common.save")}
+                                    </button>
+                                </div>
+                                {plan.summary && <p className="text-sm text-[color:var(--text-secondary)] leading-relaxed">{plan.summary}</p>}
+                            </div>
+
+                            {plan.days.map((d) => <DayCard key={`day-${d.day}`} day={d} t={t} />)}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {tab === "salvati" && (
+                <div className="space-y-4">
+                    {saved.length === 0 && (
+                        <div className="glass rounded-3xl p-8 text-center">
+                            <ChefHat size={28} className="mx-auto text-[color:var(--action-primary)] mb-3" />
+                            <div className="font-display text-lg">{t("plans.no_saved")}</div>
+                            <div className="text-sm text-[color:var(--text-secondary)] mt-1">{t("plans.no_saved_hint")}</div>
+                        </div>
+                    )}
+                    {saved.map((s) => (
+                        <div key={s.id} data-testid={`saved-plan-${s.id}`} className="glass rounded-3xl p-5">
+                            <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                    <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">
+                                        {t(`presets.${s.preset}`)} · {s.days.length} {t("plans.days").toLowerCase()}
+                                    </div>
+                                    <div className="font-display text-lg mt-1">{s.title}</div>
+                                    <div className="text-xs text-[color:var(--text-secondary)] mt-1 line-clamp-2">{s.summary}</div>
+                                </div>
+                                <button onClick={() => onDelete(s.id)} className="btn-tactile p-2 rounded-full text-[color:var(--text-secondary)]">
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                            <details className="mt-3">
+                                <summary className="cursor-pointer text-xs text-[color:var(--action-primary)]">{t("plans.show_meals")}</summary>
+                                <div className="mt-3 space-y-3">
+                                    {s.days.map((d) => <DayCard key={`saved-${s.id}-day-${d.day}`} day={d} compact t={t} />)}
+                                </div>
+                            </details>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
+
+const DayCard = ({ day, compact = false, t }) => (
+    <div className={`glass rounded-3xl p-5 ${compact ? "border border-white/5" : ""}`}>
+        <div className="flex items-baseline justify-between mb-3">
+            <h3 className="font-display text-lg">{day.label}</h3>
+            <div className="text-xs text-[color:var(--text-secondary)]">
+                {Math.round(day.total_calories)} kcal · P{Math.round(day.total_protein)} C{Math.round(day.total_carbs)} F{Math.round(day.total_fat)}
+            </div>
+        </div>
+        <div className="space-y-3">
+            {day.meals.map((m, i) => (
+                <div key={`${m.meal_type}-${m.name}-${i}`} className="pb-3 border-b border-white/5 last:border-0 last:pb-0">
+                    <div className="flex items-baseline justify-between">
+                        <div>
+                            <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">
+                                {t(`meal_types.${m.meal_type}`)}
+                            </div>
+                            <div className="font-medium">{m.name}</div>
+                        </div>
+                        <div className="text-right">
+                            <div className="font-display">{Math.round(m.calories)}<span className="text-[10px] text-[color:var(--text-secondary)] ml-1">kcal</span></div>
+                            <div className="text-[10px] text-[color:var(--text-secondary)]">P{Math.round(m.protein)} C{Math.round(m.carbs)} F{Math.round(m.fat)}</div>
+                        </div>
+                    </div>
+                    {m.description && <p className="text-xs text-[color:var(--text-secondary)] mt-1">{m.description}</p>}
+                    {m.ingredients?.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                            {m.ingredients.map((ing, k) => (
+                                <span key={`${ing}-${k}`} className="text-[10px] px-2 py-0.5 rounded-full bg-[color:var(--bg-elevated)] text-[color:var(--text-secondary)]">
+                                    {ing}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    </div>
+);
