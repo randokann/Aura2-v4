@@ -23,7 +23,7 @@ from auth import get_current_user
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Literal
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from ai import get_ai_service, AIProviderError
 from ai.constants import recovery_status_for
 
@@ -44,6 +44,14 @@ logger = logging.getLogger(__name__)
 
 # Single AI service used by every endpoint. Swap providers via AI_PROVIDER env.
 ai = get_ai_service()
+
+
+# Meal-plan generation is deliberately controlled separately from saved plans.
+# The daily total is persisted in Supabase; this in-process window only prevents
+# accidental double submissions while a request is already being handled.
+MEAL_PLAN_DAILY_GENERATION_LIMIT = 2
+MEAL_PLAN_SHORT_RATE_LIMIT_SECONDS = 10
+_meal_plan_request_times: dict[str, datetime] = {}
 
 
 # ============ MODELS ============
@@ -188,6 +196,58 @@ def compute_bmi(weight_kg: float, height_cm: float):
         category = "obese"
 
     return bmi, category
+
+
+def _ai_error(e: Exception, generic: str = "AI error") -> HTTPException:
+    """Return a stable HTTP error when the provider request fails."""
+    logger.error("%s: %s", generic, e)
+    return HTTPException(status_code=502, detail=generic)
+
+
+def _meal_plan_limit_error(code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=429,
+        detail={
+            "code": code,
+            "message": message,
+            "daily_limit": MEAL_PLAN_DAILY_GENERATION_LIMIT,
+        },
+    )
+
+
+def _enforce_meal_plan_short_rate_limit(user_id: str) -> None:
+    now = datetime.now(timezone.utc)
+    previous = _meal_plan_request_times.get(user_id)
+    if previous and now - previous < timedelta(seconds=MEAL_PLAN_SHORT_RATE_LIMIT_SECONDS):
+        raise _meal_plan_limit_error(
+            "MEAL_PLAN_RATE_LIMITED",
+            "Please wait a few seconds before generating another meal plan.",
+        )
+    _meal_plan_request_times[user_id] = now
+
+
+def _has_reached_meal_plan_daily_limit(user_id: str) -> bool:
+    today = datetime.now(timezone.utc).date().isoformat()
+    response = (
+        supabase.table("meal_plan_generation_limits")
+        .select("successful_generations")
+        .eq("user_id", user_id)
+        .eq("generation_date", today)
+        .execute()
+    )
+    if not response.data:
+        return False
+    return response.data[0].get("successful_generations", 0) >= MEAL_PLAN_DAILY_GENERATION_LIMIT
+
+
+def _record_successful_meal_plan_generation(user_id: str) -> bool:
+    """Atomically reserve one of today's two successful-response slots."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    response = supabase.rpc(
+        "record_successful_meal_plan_generation",
+        {"p_user_id": user_id, "p_generation_date": today},
+    ).execute()
+    return response.data is True
 
 def compute_calorie_goal(p: ProfileInput) -> dict:
     # --- Calorie calculation (unchanged) ---
@@ -554,6 +614,13 @@ class SavedMealPlan(BaseModel):
 
 @api_router.post("/meal-plan/generate", response_model=MealPlanResponse)
 async def generate_meal_plan(req: MealPlanRequest, user_id: str = Depends(get_current_user_id)):
+    if _has_reached_meal_plan_daily_limit(user_id):
+        raise _meal_plan_limit_error(
+            "MEAL_PLAN_DAILY_LIMIT_REACHED",
+            "You have reached today's limit of 2 meal-plan generations.",
+        )
+    _enforce_meal_plan_short_rate_limit(user_id)
+
     # Resolve profile by user_id
     resp_profile = supabase.table("profiles").select("*").eq("user_id", user_id).execute()
     profile = resp_profile.data[0] if resp_profile.data else None
@@ -568,7 +635,14 @@ async def generate_meal_plan(req: MealPlanRequest, user_id: str = Depends(get_cu
         )
     except AIProviderError as e:
         raise _ai_error(e, "Meal plan error")
-    return MealPlanResponse(**data)
+
+    plan = MealPlanResponse(**data)
+    if not _record_successful_meal_plan_generation(user_id):
+        raise _meal_plan_limit_error(
+            "MEAL_PLAN_DAILY_LIMIT_REACHED",
+            "You have reached today's limit of 2 meal-plan generations.",
+        )
+    return plan
 
 
 @api_router.post("/meal-plans", response_model=SavedMealPlan)

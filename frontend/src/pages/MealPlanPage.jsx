@@ -105,7 +105,14 @@ export const MealPlanPage = () => {
             setPlan(p);
             toast.success(t("plans.generated"));
         } catch (e) {
-            toast.error(e?.response?.data?.detail || "Error");
+            const detail = e?.response?.data?.detail;
+            if (e?.response?.status === 429 && detail?.code === "MEAL_PLAN_DAILY_LIMIT_REACHED") {
+                toast.error("You have reached today's limit of 2 meal-plan generations.");
+            } else if (e?.response?.status === 429 && detail?.code === "MEAL_PLAN_RATE_LIMITED") {
+                toast.error("Please wait a few seconds before generating another meal plan.");
+            } else {
+                toast.error(typeof detail === "string" ? detail : detail?.message || "Error");
+            }
         } finally { setGenerating(false); }
     };
 
