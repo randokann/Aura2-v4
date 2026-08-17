@@ -40,6 +40,7 @@ export const api = axios.create({ baseURL: API });
 
 // Send current language via header (set by LangProvider)
 api.interceptors.request.use(async (config) => {
+    config.auraOnlineAtRequest = typeof navigator === "undefined" ? undefined : navigator.onLine;
     const lang = localStorage.getItem("nutrisnap_lang") || "en";
     config.headers = config.headers || {};
     config.headers["X-Lang"] = lang;

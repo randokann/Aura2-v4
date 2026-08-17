@@ -6,12 +6,7 @@ import { isGuestMode, addGuestMeal } from "../lib/guestStorage";
 import { useAuth } from "../auth/AuthProvider";
 import { useLang } from "../i18n/LangContext";
 import ClarificationModal from "../components/ClarificationModal";
-import {
-    API_ERROR_KIND,
-    OFFLINE_MESSAGE,
-    classifyApiError,
-    getApiErrorMessage,
-} from "../lib/apiErrors";
+import { getAiRequestErrorMessage } from "../lib/apiErrors";
 
 function guessMealType() {
     const h = new Date().getHours();
@@ -82,12 +77,7 @@ const runAnalysis = async (b64) => {
         }
 
     } catch (e) {
-        const error = classifyApiError(e);
-        toast.error(
-            error.kind === API_ERROR_KIND.OFFLINE
-                ? OFFLINE_MESSAGE
-                : getApiErrorMessage(e, "Food analysis failed. Please try again.")
-        );
+        toast.error(getAiRequestErrorMessage(e, "Food analysis failed. Please try again."));
     } finally {
         setAnalyzing(false);
     }
@@ -114,12 +104,7 @@ const handleClarification = async (option) => {
         toast.success(t("camera.detect_success", { name: res.dish_name }));
 
     } catch (e) {
-        const error = classifyApiError(e);
-        toast.error(
-            error.kind === API_ERROR_KIND.OFFLINE
-                ? OFFLINE_MESSAGE
-                : getApiErrorMessage(e, "Clarification failed. Please try again.")
-        );
+        toast.error(getAiRequestErrorMessage(e, "Clarification failed. Please try again."));
     } finally {
         setClarifying(false);
         setSelectedOption(null);

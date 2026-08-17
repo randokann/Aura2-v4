@@ -44,13 +44,52 @@ function browserOnlineState() {
     return typeof navigator === "undefined" ? undefined : navigator.onLine;
 }
 
-export function classifyApiError(error, { online = browserOnlineState() } = {}) {
+const TRANSPORT_ERROR_CODES = new Set([
+    "ERR_NETWORK",
+    "ECONNABORTED",
+    "ETIMEDOUT",
+    "ECONNREFUSED",
+    "ENETUNREACH",
+    "ENOTFOUND",
+]);
+
+const TRANSPORT_ERROR_MESSAGES = new Set([
+    "Network Error",
+    "Failed to fetch",
+    "Load failed",
+    "Network request failed",
+]);
+
+function hasValidHttpResponse(error) {
+    const status = error?.response?.status;
+    return Number.isInteger(status) && status >= 100 && status <= 599;
+}
+
+function isTransportFailure(error, onlineAtRequest) {
+    const request = error?.request;
+    const requestStatus = request?.status;
+    const code = error?.code || error?.cause?.code;
+    const message = error?.message || error?.cause?.message;
+    const explicitNetworkSignal = TRANSPORT_ERROR_CODES.has(code)
+        || TRANSPORT_ERROR_MESSAGES.has(message)
+        || (request && requestStatus === 0);
+
+    if (explicitNetworkSignal) return true;
+
+    // navigator.onLine is only a supporting hint for a request that was actually attempted.
+    return onlineAtRequest === false && Boolean(error?.isAxiosError && request);
+}
+
+export function classifyApiError(error, options = {}) {
+    const onlineAtRequest = options.online
+        ?? error?.config?.auraOnlineAtRequest
+        ?? browserOnlineState();
     const response = error?.response;
     const status = response?.status ?? null;
     const code = getApiErrorCode(error);
 
     // A real HTTP response is authoritative: 4xx/5xx responses are never labeled offline.
-    if (response) {
+    if (hasValidHttpResponse(error)) {
         if (QUOTA_CODES.has(code)) {
             return { kind: API_ERROR_KIND.QUOTA_LIMIT, code, status };
         }
@@ -63,15 +102,15 @@ export function classifyApiError(error, { online = browserOnlineState() } = {}) 
         return { kind: API_ERROR_KIND.BACKEND, code, status };
     }
 
-    const looksLikeTransportFailure = Boolean(
-        error?.isAxiosError
-        || error?.request
-        || error?.code === "ERR_NETWORK"
-        || error?.message === "Network Error"
-    );
-    if (online === false || looksLikeTransportFailure) {
+    if (isTransportFailure(error, onlineAtRequest)) {
         return { kind: API_ERROR_KIND.OFFLINE, code: null, status: null };
     }
 
     return { kind: API_ERROR_KIND.UNEXPECTED, code: null, status: null };
+}
+
+export function getAiRequestErrorMessage(error, fallback, options) {
+    return classifyApiError(error, options).kind === API_ERROR_KIND.OFFLINE
+        ? OFFLINE_MESSAGE
+        : getApiErrorMessage(error, fallback);
 }
