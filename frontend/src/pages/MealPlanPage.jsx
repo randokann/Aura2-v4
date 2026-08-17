@@ -8,6 +8,15 @@ import { useAuth } from "../auth/AuthProvider";
 import { useLang } from "../i18n/LangContext";
 import { COMMON_INGREDIENTS } from "../i18n/translations";
 import { isGuestMode, getGuestMealPlans, addGuestMealPlan, deleteGuestMealPlan } from "../lib/guestStorage";
+import { UpgradePlanModal } from "../components/UpgradePlanModal";
+import {
+    API_ERROR_KIND,
+    DAILY_MEAL_PLAN_LIMIT_MESSAGE,
+    OFFLINE_MESSAGE,
+    RETRY_LATER_MESSAGE,
+    classifyApiError,
+    getApiErrorMessage,
+} from "../lib/apiErrors";
 
 const PRESETS = ["bilanciato", "iperproteico", "ipocalorico", "ipercalorico", "keto", "mediterraneo", "vegetariano", "vegano", "custom", "ingredients"];
 
@@ -50,6 +59,7 @@ export const MealPlanPage = ({ profile }) => {
     const [plan, setPlan] = useState(null);
     const [saved, setSaved] = useState([]);
     const [tab, setTab] = useState("nuovo");
+    const [upgradeContext, setUpgradeContext] = useState(null);
 
     const loadSaved = useCallback(async () => {
         try {
@@ -99,13 +109,15 @@ export const MealPlanPage = ({ profile }) => {
             if (toAdd.length > 0) toast.success(t("plans.added_n", { n: toAdd.length }));
             else toast.info(t("plans.no_saved") /* no new items */);
         } catch (e) {
-            const detail = e?.response?.data?.detail;
-            if (e?.response?.status === 429 && detail?.code === "GUEST_PANTRY_LIMIT_REACHED") {
-                toast.error("You have reached the lifetime limit of 1 guest pantry scan.");
-            } else if (e?.response?.status === 429 && detail?.code === "GUEST_PANTRY_RATE_LIMITED") {
-                toast.error("Please wait a few seconds before scanning the pantry again.");
+            const error = classifyApiError(e);
+            if (error.kind === API_ERROR_KIND.OFFLINE) {
+                toast.error(OFFLINE_MESSAGE);
+            } else if (error.code === "GUEST_PANTRY_LIMIT_REACHED") {
+                setUpgradeContext("pantry");
+            } else if (error.kind === API_ERROR_KIND.RATE_LIMIT) {
+                toast.error(RETRY_LATER_MESSAGE);
             } else {
-                toast.error(typeof detail === "string" ? detail : detail?.message || "Error");
+                toast.error(getApiErrorMessage(e, "Pantry scan failed. Please try again."));
             }
         } finally {
             setScanningPantry(false);
@@ -116,7 +128,6 @@ export const MealPlanPage = ({ profile }) => {
         if (preset === "custom" && !customPrompt.trim()) { toast.error(t("plans.need_custom")); return; }
         if (preset === "ingredients" && ingredients.length === 0) { toast.error(t("plans.need_ingredients")); return; }
         setGenerating(true);
-        setPlan(null);
         try {
             const p = await generateMealPlan({
                 device_id: getDeviceId(),
@@ -131,15 +142,17 @@ export const MealPlanPage = ({ profile }) => {
             setPlan(p);
             toast.success(t("plans.generated"));
         } catch (e) {
-            const detail = e?.response?.data?.detail;
-            if (e?.response?.status === 429 && detail?.code === "MEAL_PLAN_DAILY_LIMIT_REACHED") {
-                toast.error("You have reached today's limit of 2 meal-plan generations.");
-            } else if (e?.response?.status === 429 && detail?.code === "GUEST_MEAL_PLAN_LIMIT_REACHED") {
-                toast.error("You have reached the lifetime limit of 3 guest meal-plan generations.");
-            } else if (e?.response?.status === 429 && detail?.code === "MEAL_PLAN_RATE_LIMITED") {
-                toast.error("Please wait a few seconds before generating another meal plan.");
+            const error = classifyApiError(e);
+            if (error.kind === API_ERROR_KIND.OFFLINE) {
+                toast.error(OFFLINE_MESSAGE);
+            } else if (error.code === "GUEST_MEAL_PLAN_LIMIT_REACHED") {
+                setUpgradeContext("meal-plan");
+            } else if (error.code === "MEAL_PLAN_DAILY_LIMIT_REACHED") {
+                toast.error(DAILY_MEAL_PLAN_LIMIT_MESSAGE);
+            } else if (error.kind === API_ERROR_KIND.RATE_LIMIT) {
+                toast.error(RETRY_LATER_MESSAGE);
             } else {
-                toast.error(typeof detail === "string" ? detail : detail?.message || "Error");
+                toast.error(getApiErrorMessage(e, "Meal-plan generation failed. Please try again."));
             }
         } finally { setGenerating(false); }
     };
@@ -186,6 +199,13 @@ export const MealPlanPage = ({ profile }) => {
 
     return (
         <div className="min-h-screen pb-32 px-5 pt-10">
+            <UpgradePlanModal
+                open={upgradeContext !== null}
+                context={upgradeContext || "meal-plan"}
+                onOpenChange={(open) => {
+                    if (!open) setUpgradeContext(null);
+                }}
+            />
             <header className="mb-6">
                 <div className="flex items-center gap-2 text-xs tracking-overline uppercase text-[color:var(--text-secondary)]">
                     <ChefHat size={14} /> {t("plans.eyebrow")}
