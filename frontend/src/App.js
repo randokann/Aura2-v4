@@ -296,7 +296,7 @@ function Shell() {
 
             <div className="max-w-md mx-auto relative">
                 {tab === "diario" && <DiaryPage profile={profile} refreshKey={refreshKey} />}
-                {tab === "piani" && <MealPlanPage />}
+                {tab === "piani" && <MealPlanPage profile={profile} />}
                 {tab === "fotocamera" && (
                     <CameraPage
                         onSaved={() => {

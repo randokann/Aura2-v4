@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import base64
+import json
+import math
 from io import BytesIO
 from PIL import Image
 import pillow_heif
@@ -15,7 +17,7 @@ import pillow_heif
 pillow_heif.register_heif_opener()
 from typing import List, Optional
 
-from .base import AIProvider, AIProviderError
+from .base import AIProvider, AIProviderError, AIResponseFormatError
 from .constants import (
     LANGUAGE_NAMES,
     normalize_lang,
@@ -40,9 +42,272 @@ def compress_image(image_base64: str) -> str:
     return base64.b64encode(output.getvalue()).decode()
 
 
+class _AIOutputValidationError(ValueError):
+    """The provider returned JSON that does not satisfy a feature contract."""
+
+
+def _string(value, field: str, *, allow_empty: bool = False) -> str:
+    if not isinstance(value, str) or (not allow_empty and not value.strip()):
+        raise _AIOutputValidationError(f"{field} must be a string")
+    return value
+
+
+def _number(value, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _AIOutputValidationError(f"{field} must be numeric")
+    value = float(value)
+    if not math.isfinite(value) or value < 0:
+        raise _AIOutputValidationError(f"{field} must be finite and non-negative")
+    return value
+
+
+def _positive_int(value, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise _AIOutputValidationError(f"{field} must be a positive integer")
+    return value
+
+
+def _string_list(value, field: str) -> List[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise _AIOutputValidationError(f"{field} must be a list of strings")
+    return value
+
+
+MEAL_TYPES = {"colazione", "pranzo", "cena", "spuntino"}
+MEAL_PLAN_CALORIE_TOLERANCE = 0.20
+
+
+def _validate_meal_plan(data: dict, *, requested_days: int, target_kcal: int) -> dict:
+    if not isinstance(data, dict):
+        raise _AIOutputValidationError("meal plan must be a JSON object")
+
+    title = _string(data.get("title"), "title")
+    summary = _string(data.get("summary"), "summary", allow_empty=True)
+    days = data.get("days")
+    if not isinstance(days, list) or len(days) != requested_days:
+        raise _AIOutputValidationError(f"days must contain exactly {requested_days} items")
+
+    normalized_days = []
+    for index, day in enumerate(days, start=1):
+        if not isinstance(day, dict):
+            raise _AIOutputValidationError(f"days[{index}] must be an object")
+        day_number = _positive_int(day.get("day"), f"days[{index}].day")
+        if day_number != index:
+            raise _AIOutputValidationError("day numbers must be sequential starting at 1")
+        label = _string(day.get("label"), f"days[{index}].label")
+        meals = day.get("meals")
+        if not isinstance(meals, list) or len(meals) != len(MEAL_TYPES):
+            raise _AIOutputValidationError("each day must contain exactly four meals")
+
+        normalized_meals = []
+        seen_types = set()
+        totals = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+        for meal_index, meal in enumerate(meals, start=1):
+            path = f"days[{index}].meals[{meal_index}]"
+            if not isinstance(meal, dict):
+                raise _AIOutputValidationError(f"{path} must be an object")
+            meal_type = meal.get("meal_type")
+            if meal_type not in MEAL_TYPES or meal_type in seen_types:
+                raise _AIOutputValidationError(f"{path}.meal_type is invalid or duplicated")
+            seen_types.add(meal_type)
+
+            normalized_meal = {
+                "meal_type": meal_type,
+                "name": _string(meal.get("name"), f"{path}.name"),
+                "description": _string(
+                    meal.get("description"), f"{path}.description", allow_empty=True
+                ),
+                "ingredients": _string_list(meal.get("ingredients"), f"{path}.ingredients"),
+            }
+            for nutrient in totals:
+                value = _number(meal.get(nutrient), f"{path}.{nutrient}")
+                normalized_meal[nutrient] = value
+                totals[nutrient] += value
+            normalized_meals.append(normalized_meal)
+
+        if seen_types != MEAL_TYPES:
+            raise _AIOutputValidationError("each required meal type must appear once per day")
+
+        allowed_delta = max(200.0, target_kcal * MEAL_PLAN_CALORIE_TOLERANCE)
+        if abs(totals["calories"] - target_kcal) > allowed_delta:
+            raise _AIOutputValidationError(
+                f"day {index} calories must be within {allowed_delta:.0f} kcal of {target_kcal}"
+            )
+
+        normalized_days.append({
+            "day": day_number,
+            "label": label,
+            "meals": normalized_meals,
+            "total_calories": round(totals["calories"], 1),
+            "total_protein": round(totals["protein"], 1),
+            "total_carbs": round(totals["carbs"], 1),
+            "total_fat": round(totals["fat"], 1),
+        })
+
+    return {"title": title, "summary": summary, "days": normalized_days}
+
+
+_EQUIPMENT_CONFLICT_TERMS = {
+    "corpo_libero": (
+        "barbell", "dumbbell", "kettlebell", "cable", "machine",
+        "bilanciere", "manubrio", "manubri", "kettlebell", "cavo", "macchina",
+    ),
+    "casa_manubri": (
+        "barbell", "cable", "machine", "bilanciere", "cavo", "macchina",
+    ),
+    "outdoor": (
+        "barbell", "dumbbell", "kettlebell", "cable", "machine",
+        "bilanciere", "manubrio", "manubri", "kettlebell", "cavo", "macchina",
+    ),
+}
+
+
+def _validate_program(data: dict, *, requested_days: int, equipment: str) -> dict:
+    if not isinstance(data, dict):
+        raise _AIOutputValidationError("program must be a JSON object")
+
+    title = _string(data.get("title"), "title")
+    summary = _string(data.get("summary"), "summary", allow_empty=True)
+    weeks = _positive_int(data.get("weeks"), "weeks")
+    tips = _string_list(data.get("progression_tips"), "progression_tips")
+    days = data.get("days")
+    if not isinstance(days, list) or len(days) != requested_days:
+        raise _AIOutputValidationError(f"days must contain exactly {requested_days} items")
+
+    conflict_terms = _EQUIPMENT_CONFLICT_TERMS.get(equipment, ())
+    normalized_days = []
+    for index, day in enumerate(days, start=1):
+        if not isinstance(day, dict):
+            raise _AIOutputValidationError(f"days[{index}] must be an object")
+        day_number = _positive_int(day.get("day"), f"days[{index}].day")
+        if day_number != index:
+            raise _AIOutputValidationError("day numbers must be sequential starting at 1")
+        label = _string(day.get("label"), f"days[{index}].label")
+        focus = _string(day.get("focus"), f"days[{index}].focus")
+        exercises = day.get("exercises")
+        if not isinstance(exercises, list) or not exercises:
+            raise _AIOutputValidationError("each training day must contain exercises")
+
+        normalized_exercises = []
+        for exercise_index, exercise in enumerate(exercises, start=1):
+            path = f"days[{index}].exercises[{exercise_index}]"
+            if not isinstance(exercise, dict):
+                raise _AIOutputValidationError(f"{path} must be an object")
+            name = _string(exercise.get("name"), f"{path}.name")
+            sets = _positive_int(exercise.get("sets"), f"{path}.sets")
+            reps = _string(exercise.get("reps"), f"{path}.reps")
+            rest_sec = exercise.get("rest_sec")
+            if (
+                isinstance(rest_sec, bool)
+                or not isinstance(rest_sec, int)
+                or not 0 <= rest_sec <= 600
+            ):
+                raise _AIOutputValidationError(f"{path}.rest_sec must be an integer from 0 to 600")
+            notes = _string(exercise.get("notes", ""), f"{path}.notes", allow_empty=True)
+
+            searchable = f"{name} {notes}".lower()
+            if any(term in searchable for term in conflict_terms):
+                raise _AIOutputValidationError(
+                    f"{path} conflicts with requested equipment {equipment}"
+                )
+            normalized_exercises.append({
+                "name": name,
+                "sets": sets,
+                "reps": reps,
+                "rest_sec": rest_sec,
+                "notes": notes,
+            })
+
+        normalized_days.append({
+            "day": day_number,
+            "label": label,
+            "focus": focus,
+            "exercises": normalized_exercises,
+        })
+
+    return {
+        "title": title,
+        "summary": summary,
+        "weeks": weeks,
+        "days": normalized_days,
+        "progression_tips": tips,
+    }
+
+
+def _validate_pantry(data: dict) -> dict:
+    if not isinstance(data, dict):
+        raise _AIOutputValidationError("pantry result must be a JSON object")
+    ingredients = _string_list(data.get("ingredients"), "ingredients")
+    notes = _string(data.get("notes"), "notes", allow_empty=True)
+
+    seen, clean = set(), []
+    for ingredient in ingredients:
+        value = ingredient.strip()[:50]
+        if not value:
+            continue
+        key = value.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean.append(value)
+        if len(clean) >= 40:
+            break
+    return {"ingredients": clean, "notes": notes}
+
+
 class AIService:
     def __init__(self, provider: AIProvider):
         self._provider = provider
+
+    async def _validated_completion(
+        self,
+        *,
+        system: str,
+        prompt: str,
+        validator,
+        repair_constraint: str,
+        images_base64: Optional[List[str]] = None,
+        temperature: float = 0.4,
+    ) -> dict:
+        """Validate one generation and allow one narrowly scoped repair."""
+        candidate = None
+        first_error = None
+        try:
+            candidate = await self._provider.json_completion(
+                system=system,
+                prompt=prompt,
+                images_base64=images_base64,
+                temperature=temperature,
+                max_retries=0,
+            )
+            return validator(candidate)
+        except (AIResponseFormatError, _AIOutputValidationError) as exc:
+            first_error = exc
+
+        candidate_context = ""
+        if candidate is not None:
+            candidate_context = (
+                "\nCandidate to correct:\n"
+                + json.dumps(candidate, ensure_ascii=False)[:6000]
+            )
+        repair_prompt = (
+            f"{prompt}\n\nREPAIR: Return the same result corrected to match the required "
+            f"schema and constraints. {repair_constraint} "
+            f"Validation problem: {first_error}.{candidate_context}"
+        )
+        try:
+            repaired = await self._provider.json_completion(
+                system=system,
+                prompt=repair_prompt,
+                images_base64=images_base64,
+                temperature=temperature,
+                max_retries=0,
+            )
+            return validator(repaired)
+        except (AIProviderError, _AIOutputValidationError) as exc:
+            raise AIProviderError(
+                f"AI output remained invalid after one repair: {exc}"
+            ) from exc
 
     # ---------------- food analysis ----------------
 
@@ -267,92 +532,78 @@ Important:
         ingredients: List[str],
         profile: Optional[dict],
         lang: str,
+        planning_targets: Optional[dict] = None,
     ) -> dict:
         lang = normalize_lang(lang)
         lang_name = LANGUAGE_NAMES[lang]
         directive = preset_directive(preset, lang)
+        targets = dict(planning_targets or {})
+        targets["calories"] = target_kcal
+        target_labels = (
+            ("Calorie", "Proteine", "Carboidrati", "Grassi", "Fibre", "BMI", "Obiettivo", "Attività")
+            if lang == "it"
+            else ("Calories", "Protein", "Carbohydrates", "Fat", "Fiber", "BMI", "Goal", "Activity")
+        )
+        target_keys = (
+            "calories", "protein", "carbs", "fat", "fiber", "bmi", "goal", "activity_level"
+        )
+        units = {
+            "calories": " kcal/day",
+            "protein": " g/day",
+            "carbs": " g/day",
+            "fat": " g/day",
+            "fiber": " g/day",
+        }
+        target_lines = []
+        for label, key in zip(target_labels, target_keys):
+            value = targets.get(key)
+            if value is not None:
+                target_lines.append(f"- {label}: {value}{units.get(key, '')}")
 
-        ingredients_line = ""
-        if ingredients:
-            joined = ", ".join(ingredients[:40])
-            if lang == "it":
-                ingredients_line = f"Ingredienti disponibili (usali principalmente): {joined}."
-            else:
-                ingredients_line = f"Available ingredients (use them primarily): {joined}."
+        secondary_profile = ""
+        if profile:
+            available = [
+                f"sex={profile.get('sex')}" if profile.get("sex") else "",
+                f"age={profile.get('age')}" if profile.get("age") else "",
+                f"height_cm={profile.get('height_cm')}" if profile.get("height_cm") else "",
+                f"weight_kg={profile.get('current_weight_kg')}" if profile.get("current_weight_kg") else "",
+            ]
+            secondary_profile = ", ".join(item for item in available if item)
 
-        if lang == "it":
-            profile_info = ""
-            if profile:
-                profile_info = (
-                    f"Utente: {profile.get('sex')}, {profile.get('age')} anni, {profile.get('height_cm')}cm, "
-                    f"{profile.get('current_weight_kg')}kg (obiettivo {profile.get('target_weight_kg')}kg), "
-                    f"attività {profile.get('activity_level')}, obiettivo {profile.get('goal')}."
-                )
-            system = (
-                "Sei un nutrizionista sportivo italiano. Crea piani alimentari precisi, realistici e vari. "
-                "Rispondi SEMPRE e SOLO con un oggetto JSON valido in italiano."
-            )
-            prompt = f"""Crea un piano alimentare di {days} giorni.
-Preset: {preset} ({directive})
-Target calorie/die: ~{target_kcal} kcal
-Allergie/restrizioni: {allergies or "nessuna"}
-{ingredients_line}
-{profile_info}
-{"Note utente: " + custom_prompt if custom_prompt else ""}
-
-JSON:
-{{
-  "title": "titolo", "summary": "riassunto",
-  "days": [{{"day": 1, "label": "Giorno 1", "meals": [
-    {{"meal_type": "colazione|pranzo|cena|spuntino", "name": "...", "description": "...",
-      "calories": n, "protein": g, "carbs": g, "fat": g, "ingredients": ["..."]}}
-  ], "total_calories": s, "total_protein": s, "total_carbs": s, "total_fat": s}}]
-}}
-Genera 4 pasti al giorno. Vari i piatti. SOLO JSON."""
-        else:
-            profile_info = ""
-            if profile:
-                profile_info = (
-                    f"User: {profile.get('sex')}, {profile.get('age')}y, {profile.get('height_cm')}cm, "
-                    f"{profile.get('current_weight_kg')}kg (target {profile.get('target_weight_kg')}kg), "
-                    f"activity {profile.get('activity_level')}, goal {profile.get('goal')}."
-                )
-            system = (
-                f"You are a sports nutritionist. Create precise, realistic, varied meal plans. "
-                f"ALWAYS respond ONLY with a valid JSON object. All string values MUST be in {lang_name}. "
-                f"For meal_type ALWAYS use one of exactly: colazione, pranzo, cena, spuntino (internal keys)."
-            )
-            prompt = f"""Create a {days}-day meal plan.
-Preset: {preset} ({directive})
-Target calories/day: ~{target_kcal} kcal
+        system = (
+            f"You compose practical meal plans. Aura2 has already calculated all supplied numeric "
+            f"nutrition targets; never recompute or override BMI, BMR/TDEE, calories, macros, fiber, "
+            f"or weight direction. Select foods, portions, recipes, and variety around those constraints. "
+            f"Return only valid JSON; all human-readable strings must be in {lang_name}. "
+            "Keep meal_type as the internal keys colazione, pranzo, cena, spuntino."
+        )
+        prompt = f"""Compose a {days}-day meal plan with exactly four meals per day.
+Preset: {preset} — {directive}
+Authoritative Aura2 targets:
+{chr(10).join(target_lines)}
 Allergies/restrictions: {allergies or "none"}
-{ingredients_line}
-{profile_info}
-{"User notes: " + custom_prompt if custom_prompt else ""}
+Available ingredients: {", ".join(ingredients[:40]) if ingredients else "none supplied"}
+User instructions: {custom_prompt or "none"}
+Secondary profile context (do not calculate targets from it): {secondary_profile or "none"}
 
-JSON:
-{{
-  "title": "IN {lang_name}", "summary": "IN {lang_name}",
-  "days": [{{"day": 1, "label": "Day 1 IN {lang_name}", "meals": [
-    {{"meal_type": "colazione|pranzo|cena|spuntino", "name": "IN {lang_name}",
-      "description": "IN {lang_name}", "calories": n, "protein": g, "carbs": g, "fat": g,
-      "ingredients": ["IN {lang_name}"]}}
-  ], "total_calories": s, "total_protein": s, "total_carbs": s, "total_fat": s}}]
-}}
-Generate 4 meals per day (colazione=breakfast, pranzo=lunch, spuntino=snack, cena=dinner).
-All text in {lang_name}. JSON ONLY."""
+Schema:
+{{"title":"...","summary":"...","days":[{{"day":1,"label":"...","meals":[
+{{"meal_type":"colazione|pranzo|cena|spuntino","name":"...","description":"...",
+"calories":0,"protein":0,"carbs":0,"fat":0,"ingredients":["..."]}}
+],"total_calories":0,"total_protein":0,"total_carbs":0,"total_fat":0}}]}}
+Use realistic non-negative estimates. JSON only."""
 
-        data = await self._provider.json_completion(
+        return await self._validated_completion(
             system=system,
             prompt=prompt,
-            temperature=0.4
+            validator=lambda data: _validate_meal_plan(
+                data, requested_days=days, target_kcal=target_kcal
+            ),
+            repair_constraint=(
+                f"Return exactly {days} sequential days, each with one of every required meal type; "
+                f"keep each day's meal-calorie sum within 20% of {target_kcal} kcal."
+            ),
         )
-
-        data.setdefault("title", f"Plan {preset}")
-        data.setdefault("summary", "")
-        data.setdefault("days", [])
-
-        return data
 
     # ---------------- form analysis ----------------
 
@@ -412,62 +663,45 @@ All text in {lang_name}. JSON ONLY."""
     ) -> dict:
         lang = normalize_lang(lang)
         lang_name = LANGUAGE_NAMES[lang]
+        profile_info = "none"
+        if profile:
+            values = [
+                f"sex={profile.get('sex')}" if profile.get("sex") else "",
+                f"age={profile.get('age')}" if profile.get("age") else "",
+                f"weight_kg={profile.get('current_weight_kg')}" if profile.get("current_weight_kg") else "",
+            ]
+            profile_info = ", ".join(value for value in values if value) or "none"
 
-        if lang == "it":
-            profile_info = ""
-            if profile:
-                profile_info = f"Utente {profile.get('sex')}, {profile.get('age')}a, {profile.get('current_weight_kg')}kg."
-            system = (
-                "Sei un preparatore atletico italiano. Programmi periodizzati, sicuri e progressivi. "
-                "Rispondi SEMPRE e SOLO con JSON valido in italiano."
-            )
-            prompt = f"""Crea un programma settimanale.
-Obiettivo: {goal}  Livello: {level}  Giorni/sett.: {days_per_week}
-Attrezzatura: {equipment.replace('_', ' ')}
-Focus: {focus_areas or "corpo intero"}
-{plateau_context}{"Note plateau: " + plateau_info if plateau_info else ""}
-{profile_info}
+        system = (
+            f"You compose safe, progressive training programs from fixed Aura2 constraints. "
+            f"Do not change the goal, training-day count, experience level, or available equipment, "
+            f"and do not make medical or rehabilitation conclusions. Select exercises, sets, reps, "
+            f"rest, volume distribution, and progression guidance. Return only valid JSON; all "
+            f"human-readable strings must be in {lang_name}."
+        )
+        prompt = f"""Compose one weekly training program.
+Fixed constraints: goal={goal}; level={level}; days={days_per_week}; equipment={equipment.replace('_', ' ')}.
+Focus areas: {focus_areas or "balanced full body"}
+Plateau context: {(plateau_context + plateau_info).strip() or "none"}
+Secondary profile context: {profile_info}
 
-JSON:
-{{
-  "title": "...", "summary": "...", "weeks": 4,
-  "days": [{{"day": 1, "label": "Lunedì – Push", "focus": "...",
-    "exercises": [{{"name": "...", "sets": 4, "reps": "6-8", "rest_sec": 120, "notes": "..."}}]}}],
-  "progression_tips": ["..."]
-}}
-{days_per_week} giorni, 5-7 esercizi. SOLO JSON."""
-        else:
-            profile_info = ""
-            if profile:
-                profile_info = f"User: {profile.get('sex')}, {profile.get('age')}y, {profile.get('current_weight_kg')}kg."
-            system = (
-                f"You are a strength & conditioning coach. Periodized, safe, progressive programs. "
-                f"ALWAYS respond ONLY with valid JSON. All string values MUST be in {lang_name}."
-            )
-            prompt = f"""Create a weekly training program.
-Goal: {goal}  Level: {level}  Days/week: {days_per_week}
-Equipment: {equipment.replace('_', ' ')}
-Focus: {focus_areas or "balanced full body"}
-{plateau_context}{"Plateau notes: " + plateau_info if plateau_info else ""}
-{profile_info}
+Schema:
+{{"title":"...","summary":"...","weeks":4,"days":[{{"day":1,"label":"...","focus":"...",
+"exercises":[{{"name":"...","sets":4,"reps":"6-8","rest_sec":120,"notes":"..."}}]}}],
+"progression_tips":["..."]}}
+Return exactly {days_per_week} days with 5-7 exercises each. Use only the available equipment. JSON only."""
 
-JSON:
-{{
-  "title": "IN {lang_name}", "summary": "IN {lang_name}", "weeks": 4,
-  "days": [{{"day": 1, "label": "IN {lang_name}", "focus": "IN {lang_name}",
-    "exercises": [{{"name": "IN {lang_name}", "sets": 4, "reps": "6-8",
-                    "rest_sec": 120, "notes": "IN {lang_name}"}}]}}],
-  "progression_tips": ["IN {lang_name}"]
-}}
-{days_per_week} days, 5-7 exercises each. All text in {lang_name}. JSON ONLY."""
-
-        data = await self._provider.json_completion(system=system, prompt=prompt, temperature=0.4)
-        data.setdefault("title", f"Program {goal}")
-        data.setdefault("summary", "")
-        data.setdefault("weeks", 4)
-        data.setdefault("days", [])
-        data.setdefault("progression_tips", [])
-        return data
+        return await self._validated_completion(
+            system=system,
+            prompt=prompt,
+            validator=lambda data: _validate_program(
+                data, requested_days=days_per_week, equipment=equipment
+            ),
+            repair_constraint=(
+                f"Return exactly {days_per_week} sequential training days with non-empty exercises, "
+                f"positive integer sets, 0-600 second rests, and no equipment beyond {equipment}."
+            ),
+        )
 
     # ---------------- recovery advice ----------------
 
@@ -521,42 +755,25 @@ JSON ONLY."""
         lang_name = LANGUAGE_NAMES[lang]
 
         system = (
-            f"You are a food inventory expert. Look at a fridge/pantry/kitchen photo and identify "
-            f"ALL edible ingredients you can recognize. Be thorough but only list items clearly visible. "
-            f"Respond ONLY with valid JSON. Ingredient names MUST be in {lang_name}, "
-            f"generic and short. Combine duplicates."
+            f"Identify only visible edible ingredients in an image. Use short generic names in "
+            f"{lang_name}; deduplicate and ignore non-food items and unnecessary brands. Recognize "
+            f"clear labels, but never guess hidden contents or opaque containers. Return only valid JSON."
         )
-        prompt = f"""Analyze this fridge/pantry photo. List every edible ingredient you can identify.
+        prompt = f"""Inspect this fridge or pantry image.
 
-JSON:
-{{
-  "ingredients": ["IN {lang_name}", ...],
-  "notes": "short note IN {lang_name}"
-}}
-
-Names must be generic and singular where possible. Do not invent items. JSON ONLY."""
+Schema: {{"ingredients":["short generic visible food"],"notes":"concise note"}}
+If no food is visible or identification is uncertain, return an empty ingredients list and a concise explanation.
+Do not calculate nutrition or suggest meals. JSON only."""
 
         image_base64 = compress_image(image_base64)
 
-        data = await self._provider.json_completion(
-            system=system, prompt=prompt, images_base64=[image_base64], temperature=0.4,
+        return await self._validated_completion(
+            system=system,
+            prompt=prompt,
+            images_base64=[image_base64],
+            validator=_validate_pantry,
+            repair_constraint="Return ingredients as a string list and notes as a string.",
         )
-        ings = data.get("ingredients") or []
-        seen, clean = set(), []
-        for it in ings:
-            if not isinstance(it, str):
-                continue
-            v = it.strip()[:50]
-            if not v:
-                continue
-            k = v.lower()
-            if k in seen:
-                continue
-            seen.add(k)
-            clean.append(v)
-            if len(clean) >= 40:
-                break
-        return {"ingredients": clean, "notes": data.get("notes", "")}
 
     # ---------------- food clarification ----------------
 

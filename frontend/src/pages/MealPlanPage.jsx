@@ -11,7 +11,29 @@ import { isGuestMode, getGuestMealPlans, addGuestMealPlan, deleteGuestMealPlan }
 
 const PRESETS = ["bilanciato", "iperproteico", "ipocalorico", "ipercalorico", "keto", "mediterraneo", "vegetariano", "vegano", "custom", "ingredients"];
 
-export const MealPlanPage = () => {
+function planningTargetsFromProfile(profile) {
+    if (!profile) return null;
+    const weightDiff = Number(profile.target_weight_kg) - Number(profile.current_weight_kg);
+    const weightDirection = profile.goal === "dimagrire" || weightDiff < -0.5
+        ? "dimagrire"
+        : profile.goal === "aumentare" || weightDiff > 0.5
+            ? "aumentare"
+            : "mantenere";
+    const targets = {
+        calories: Number(profile.daily_calorie_goal),
+        protein: Number(profile.protein_goal),
+        carbs: Number(profile.carbs_goal),
+        fat: Number(profile.fat_goal),
+        fiber: Number(profile.fiber_goal),
+        bmi: Number(profile.bmi),
+        goal: weightDirection,
+        activity_level: profile.activity_level,
+    };
+    const numeric = ["calories", "protein", "carbs", "fat", "fiber", "bmi"];
+    return numeric.every((key) => Number.isFinite(targets[key])) ? targets : null;
+}
+
+export const MealPlanPage = ({ profile }) => {
     const { t, lang } = useLang();
     const { user } = useAuth();
     const guestMode = !user && isGuestMode();
@@ -77,7 +99,14 @@ export const MealPlanPage = () => {
             if (toAdd.length > 0) toast.success(t("plans.added_n", { n: toAdd.length }));
             else toast.info(t("plans.no_saved") /* no new items */);
         } catch (e) {
-            toast.error(e?.response?.data?.detail || "Error");
+            const detail = e?.response?.data?.detail;
+            if (e?.response?.status === 429 && detail?.code === "GUEST_PANTRY_LIMIT_REACHED") {
+                toast.error("You have reached the lifetime limit of 1 guest pantry scan.");
+            } else if (e?.response?.status === 429 && detail?.code === "GUEST_PANTRY_RATE_LIMITED") {
+                toast.error("Please wait a few seconds before scanning the pantry again.");
+            } else {
+                toast.error(typeof detail === "string" ? detail : detail?.message || "Error");
+            }
         } finally {
             setScanningPantry(false);
         }
@@ -86,10 +115,6 @@ export const MealPlanPage = () => {
     const generate = async () => {
         if (preset === "custom" && !customPrompt.trim()) { toast.error(t("plans.need_custom")); return; }
         if (preset === "ingredients" && ingredients.length === 0) { toast.error(t("plans.need_ingredients")); return; }
-        if (guestMode) {
-            toast.error("Meal plan generation currently requires an account.");
-            return;
-        }
         setGenerating(true);
         setPlan(null);
         try {
@@ -101,6 +126,7 @@ export const MealPlanPage = () => {
                 target_calories: targetKcal ? Number(targetKcal) : null,
                 allergies,
                 ingredients: preset === "ingredients" ? ingredients : [],
+                planning_targets: guestMode ? planningTargetsFromProfile(profile) : null,
             });
             setPlan(p);
             toast.success(t("plans.generated"));
@@ -108,6 +134,8 @@ export const MealPlanPage = () => {
             const detail = e?.response?.data?.detail;
             if (e?.response?.status === 429 && detail?.code === "MEAL_PLAN_DAILY_LIMIT_REACHED") {
                 toast.error("You have reached today's limit of 2 meal-plan generations.");
+            } else if (e?.response?.status === 429 && detail?.code === "GUEST_MEAL_PLAN_LIMIT_REACHED") {
+                toast.error("You have reached the lifetime limit of 3 guest meal-plan generations.");
             } else if (e?.response?.status === 429 && detail?.code === "MEAL_PLAN_RATE_LIMITED") {
                 toast.error("Please wait a few seconds before generating another meal plan.");
             } else {

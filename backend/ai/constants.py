@@ -35,29 +35,29 @@ def recovery_status_for(score, lang):
 
 
 PRESET_DIRECTIVES_IT = {
-    "ipercalorico": "surplus calorico per aumento massa muscolare (+400 kcal sopra TDEE), alto in carboidrati complessi",
-    "iperproteico": "alto contenuto proteico (2g/kg peso corporeo), bilanciato in carbo e grassi",
-    "ipocalorico": "deficit calorico moderato per dimagrimento (-500 kcal), alto volume, saziante",
-    "bilanciato": "distribuzione classica 30/40/30 (P/C/G), varietà di alimenti",
-    "keto": "chetogenica: <30g carbo/die, alto grassi, moderata proteina",
+    "ipercalorico": "usa pasti caloricamente densi restando nel target calorico Aura2; non calcolare un surplus",
+    "iperproteico": "privilegia alimenti proteici e distribuisce il target proteico Aura2 tra i pasti; non creare un nuovo target",
+    "ipocalorico": "usa pasti sazianti e a bassa densità calorica restando nel target Aura2; non calcolare un deficit",
+    "bilanciato": "crea un piano vario e pratico intorno ai target calorici e macro Aura2",
+    "keto": "usa alimenti chetogenici e carboidrati molto bassi; mantieni calorie e proteine Aura2 e segnala sinteticamente l'eventuale conflitto con il target carboidrati",
     "vegetariano": "senza carne né pesce, latticini e uova ammessi, focus su legumi",
     "vegano": "100% vegetale, focus su legumi, cereali integrali, tofu, tempeh",
     "mediterraneo": "olio EVO, pesce azzurro, legumi, verdure, cereali integrali, frutta",
-    "custom": "seguire istruzioni utente",
-    "ingredients": "costruire i pasti usando prevalentemente gli ingredienti forniti dall'utente",
+    "custom": "segui materialmente le istruzioni utente senza sostituire i target numerici Aura2",
+    "ingredients": "usa prevalentemente gli ingredienti forniti; aggiungi solo normali ingredienti di base e non inventare ingredienti principali",
 }
 
 PRESET_DIRECTIVES_EN = {
-    "ipercalorico": "caloric surplus for muscle mass gain (+400 kcal above TDEE), high in complex carbs",
-    "iperproteico": "high protein (2g/kg bodyweight), balanced carbs and fats",
-    "ipocalorico": "moderate caloric deficit for fat loss (-500 kcal), high volume, satiating",
-    "bilanciato": "balanced 30/40/30 distribution (P/C/F), variety of foods",
-    "keto": "ketogenic: <30g carbs/day, high fat, moderate protein",
+    "ipercalorico": "use calorie-dense meals within Aura2's calorie target; do not calculate a surplus",
+    "iperproteico": "prioritize protein-rich foods and distribute Aura2's protein target across meals; do not create a new target",
+    "ipocalorico": "use filling, lower-calorie-density meals within Aura2's target; do not calculate a deficit",
+    "bilanciato": "create a varied, practical plan around Aura2's calorie and macro targets",
+    "keto": "use keto-compatible foods and very low carbohydrates; preserve Aura2 calories and protein and briefly disclose any conflict with the carbohydrate target",
     "vegetariano": "no meat or fish, dairy and eggs allowed, focus on legumes",
     "vegano": "100% plant-based, legumes, whole grains, tofu, tempeh",
     "mediterraneo": "EVO olive oil, oily fish, legumes, vegetables, whole grains, fruit",
-    "custom": "follow user instructions",
-    "ingredients": "build meals primarily using the ingredients provided by the user",
+    "custom": "materially follow user instructions without replacing Aura2's numeric targets",
+    "ingredients": "primarily use supplied ingredients; add only ordinary pantry staples and do not invent major ingredients",
 }
 
 

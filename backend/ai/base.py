@@ -16,6 +16,10 @@ class AIProviderError(Exception):
     """Raised when the underlying AI provider fails (network, quota, invalid JSON)."""
 
 
+class AIResponseFormatError(AIProviderError):
+    """Raised when a provider response cannot be parsed as the requested JSON."""
+
+
 class AIProvider(ABC):
     """Contract every AI backend must implement."""
 
@@ -49,12 +53,15 @@ class AIProvider(ABC):
 def extract_json(text: str) -> dict:
     """Best-effort extraction of a JSON object from a model's raw text response."""
     text = (text or "").strip()
-    # Prefer fenced ```json blocks
-    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if fence:
-        return json.loads(fence.group(1))
-    # Fallback to first top-level object
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(0))
-    raise AIProviderError(f"No JSON found in response: {text[:200]}")
+    try:
+        # Prefer fenced ```json blocks
+        fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if fence:
+            return json.loads(fence.group(1))
+        # Fallback to first top-level object
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+    except json.JSONDecodeError as exc:
+        raise AIResponseFormatError(f"Invalid JSON response: {text[:200]}") from exc
+    raise AIResponseFormatError(f"No JSON found in response: {text[:200]}")

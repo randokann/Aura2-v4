@@ -18,7 +18,7 @@ supabase: Client = create_client(
     SUPABASE_SERVICE_ROLE_KEY
 )
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Header
 from auth import get_current_user
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
@@ -52,6 +52,10 @@ ai = get_ai_service()
 MEAL_PLAN_DAILY_GENERATION_LIMIT = 2
 MEAL_PLAN_SHORT_RATE_LIMIT_SECONDS = 10
 _meal_plan_request_times: dict[str, datetime] = {}
+GUEST_MEAL_PLAN_LIFETIME_LIMIT = 3
+GUEST_PANTRY_LIFETIME_LIMIT = 1
+GUEST_PANTRY_SHORT_RATE_LIMIT_SECONDS = 10
+_guest_pantry_request_times: dict[str, datetime] = {}
 
 
 # ============ MODELS ============
@@ -215,6 +219,34 @@ def _meal_plan_limit_error(code: str, message: str) -> HTTPException:
     )
 
 
+def _guest_limit_error(code: str, message: str, limit: int) -> HTTPException:
+    return HTTPException(
+        status_code=429,
+        detail={"code": code, "message": message, "limit": limit},
+    )
+
+
+def _guest_id_or_error(device_id: Optional[str]) -> str:
+    if not device_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "GUEST_DEVICE_ID_REQUIRED", "message": "A guest device_id is required."},
+        )
+    try:
+        return str(uuid.UUID(device_id))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_GUEST_DEVICE_ID", "message": "Guest device_id must be a UUID."},
+        )
+
+
+async def _optional_current_user(authorization: Optional[str]) -> Optional[dict]:
+    if not authorization:
+        return None
+    return await get_current_user(authorization)
+
+
 def _enforce_meal_plan_short_rate_limit(user_id: str) -> None:
     now = datetime.now(timezone.utc)
     previous = _meal_plan_request_times.get(user_id)
@@ -224,6 +256,18 @@ def _enforce_meal_plan_short_rate_limit(user_id: str) -> None:
             "Please wait a few seconds before generating another meal plan.",
         )
     _meal_plan_request_times[user_id] = now
+
+
+def _enforce_guest_pantry_short_rate_limit(guest_id: str) -> None:
+    now = datetime.now(timezone.utc)
+    previous = _guest_pantry_request_times.get(guest_id)
+    if previous and now - previous < timedelta(seconds=GUEST_PANTRY_SHORT_RATE_LIMIT_SECONDS):
+        raise _guest_limit_error(
+            "GUEST_PANTRY_RATE_LIMITED",
+            "Please wait a few seconds before scanning the pantry again.",
+            GUEST_PANTRY_LIFETIME_LIMIT,
+        )
+    _guest_pantry_request_times[guest_id] = now
 
 
 def _has_reached_meal_plan_daily_limit(user_id: str) -> bool:
@@ -249,6 +293,51 @@ def _record_successful_meal_plan_generation(user_id: str) -> bool:
     ).execute()
     return response.data is True
 
+
+def _has_reached_guest_meal_plan_limit(guest_id: str) -> bool:
+    response = (
+        supabase.table("guest_meal_plan_generation_limits")
+        .select("successful_generations")
+        .eq("guest_id", guest_id)
+        .execute()
+    )
+    return bool(response.data and response.data[0].get("successful_generations", 0) >= GUEST_MEAL_PLAN_LIFETIME_LIMIT)
+
+
+def _record_successful_guest_meal_plan_generation(guest_id: str) -> bool:
+    response = supabase.rpc(
+        "record_successful_guest_meal_plan_generation",
+        {"p_guest_id": guest_id},
+    ).execute()
+    return response.data is True
+
+
+def _has_reached_guest_pantry_limit(guest_id: str) -> bool:
+    response = (
+        supabase.table("guest_pantry_scan_limits")
+        .select("successful_scans")
+        .eq("guest_id", guest_id)
+        .execute()
+    )
+    return bool(response.data and response.data[0].get("successful_scans", 0) >= GUEST_PANTRY_LIFETIME_LIMIT)
+
+
+def _record_successful_guest_pantry_scan(guest_id: str) -> bool:
+    response = supabase.rpc(
+        "record_successful_guest_pantry_scan",
+        {"p_guest_id": guest_id},
+    ).execute()
+    return response.data is True
+
+def resolve_weight_direction(goal: str, current_weight_kg: float, target_weight_kg: float) -> str:
+    diff = target_weight_kg - current_weight_kg
+    if goal == "dimagrire" or diff < -0.5:
+        return "dimagrire"
+    if goal == "aumentare" or diff > 0.5:
+        return "aumentare"
+    return "mantenere"
+
+
 def compute_calorie_goal(p: ProfileInput) -> dict:
     # --- Calorie calculation (unchanged) ---
     if p.sex == "maschio":
@@ -265,10 +354,12 @@ def compute_calorie_goal(p: ProfileInput) -> dict:
     }
     tdee = bmr * factors[p.activity_level]
 
-    diff = p.target_weight_kg - p.current_weight_kg
-    if p.goal == "dimagrire" or diff < -0.5:
+    weight_direction = resolve_weight_direction(
+        p.goal, p.current_weight_kg, p.target_weight_kg
+    )
+    if weight_direction == "dimagrire":
         calorie_goal = tdee - 500
-    elif p.goal == "aumentare" or diff > 0.5:
+    elif weight_direction == "aumentare":
         calorie_goal = tdee + 400
     else:
         calorie_goal = tdee
@@ -562,34 +653,59 @@ async def daily_summary(
 
 # ============ MEAL PLANNING ============
 
+class PlanningTargets(BaseModel):
+    """Non-authorizing nutrition constraints already calculated by Aura2."""
+
+    calories: float = Field(ge=800, le=6000)
+    protein: Optional[float] = Field(default=None, ge=0, le=500)
+    carbs: Optional[float] = Field(default=None, ge=0, le=1000)
+    fat: Optional[float] = Field(default=None, ge=0, le=500)
+    fiber: Optional[float] = Field(default=None, ge=0, le=150)
+    bmi: Optional[float] = Field(default=None, ge=10, le=80)
+    goal: Optional[Literal["dimagrire", "mantenere", "aumentare"]] = None
+    activity_level: Optional[Literal["sedentario", "leggero", "moderato", "intenso", "molto_intenso"]] = None
+
+
 class MealPlanRequest(BaseModel):
-    device_id: Optional[str] = None          # kept for compatibility, ignored
+    device_id: Optional[str] = None          # quota identity for unauthenticated guests
     preset: Literal["ipercalorico", "iperproteico", "ipocalorico", "bilanciato", "keto", "vegetariano", "vegano", "mediterraneo", "custom", "ingredients"] = "bilanciato"
     custom_prompt: str = ""
-    days: int = 3
-    target_calories: Optional[int] = None
+    days: int = Field(default=3, ge=1, le=7)
+    target_calories: Optional[int] = Field(default=None, ge=800, le=6000)
     allergies: str = ""
-    ingredients: List[str] = []
+    ingredients: List[str] = Field(default_factory=list, max_length=40)
+    planning_targets: Optional[PlanningTargets] = None
     lang: str = "en"
 
+
+class PantryExtractRequest(BaseModel):
+    device_id: Optional[str] = None
+    image_base64: str
+    lang: str = "en"
+
+
+class PantryExtractResponse(BaseModel):
+    ingredients: List[str]
+    notes: str = ""
+
 class PlannedMeal(BaseModel):
-    meal_type: str
+    meal_type: Literal["colazione", "pranzo", "cena", "spuntino"]
     name: str
     description: str
-    calories: float
-    protein: float
-    carbs: float
-    fat: float
-    ingredients: List[str] = []
+    calories: float = Field(ge=0)
+    protein: float = Field(ge=0)
+    carbs: float = Field(ge=0)
+    fat: float = Field(ge=0)
+    ingredients: List[str] = Field(default_factory=list)
 
 class PlannedDay(BaseModel):
-    day: int
+    day: int = Field(ge=1)
     label: str
     meals: List[PlannedMeal]
-    total_calories: float
-    total_protein: float
-    total_carbs: float
-    total_fat: float
+    total_calories: float = Field(ge=0)
+    total_protein: float = Field(ge=0)
+    total_carbs: float = Field(ge=0)
+    total_fat: float = Field(ge=0)
 
 class MealPlanResponse(BaseModel):
     title: str
@@ -612,37 +728,146 @@ class SavedMealPlan(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+def normalize_planning_targets(
+    *,
+    profile: Optional[dict],
+    guest_targets: Optional[PlanningTargets],
+    calorie_override: Optional[int],
+) -> dict:
+    """Create one authoritative planning-target shape for auth and guest flows."""
+    source = {}
+    if profile:
+        derived = {}
+        try:
+            derived = compute_calorie_goal(ProfileInput(**profile))
+        except (TypeError, ValueError):
+            logger.warning("Profile raw fields unavailable for target fallback")
+
+        def stored_or_derived(stored_key: str, derived_key: str):
+            value = profile.get(stored_key)
+            if value is None or (stored_key == "bmi" and value <= 0):
+                return derived.get(derived_key)
+            return value
+
+        source = {
+            "calories": stored_or_derived("daily_calorie_goal", "daily_calorie_goal"),
+            "protein": stored_or_derived("protein_goal", "protein_goal"),
+            "carbs": stored_or_derived("carbs_goal", "carbs_goal"),
+            "fat": stored_or_derived("fat_goal", "fat_goal"),
+            "fiber": stored_or_derived("fiber_goal", "fiber_goal"),
+            "bmi": stored_or_derived("bmi", "bmi"),
+            "goal": resolve_weight_direction(
+                profile.get("goal", "mantenere"),
+                profile.get("current_weight_kg", 0),
+                profile.get("target_weight_kg", profile.get("current_weight_kg", 0)),
+            ),
+            "activity_level": profile.get("activity_level"),
+        }
+    elif guest_targets:
+        # These are generation constraints only. They never select or authorize data.
+        source = guest_targets.model_dump()
+
+    source["calories"] = calorie_override or source.get("calories") or 2000
+    return PlanningTargets(**source).model_dump()
+
+
 @api_router.post("/meal-plan/generate", response_model=MealPlanResponse)
-async def generate_meal_plan(req: MealPlanRequest, user_id: str = Depends(get_current_user_id)):
-    if _has_reached_meal_plan_daily_limit(user_id):
-        raise _meal_plan_limit_error(
-            "MEAL_PLAN_DAILY_LIMIT_REACHED",
-            "You have reached today's limit of 2 meal-plan generations.",
-        )
-    _enforce_meal_plan_short_rate_limit(user_id)
+async def generate_meal_plan(
+    req: MealPlanRequest,
+    authorization: Optional[str] = Header(None),
+):
+    user = await _optional_current_user(authorization)
+    guest_id = None
 
-    # Resolve profile by user_id
-    resp_profile = supabase.table("profiles").select("*").eq("user_id", user_id).execute()
-    profile = resp_profile.data[0] if resp_profile.data else None
+    if user:
+        user_id = user["id"]
+        if _has_reached_meal_plan_daily_limit(user_id):
+            raise _meal_plan_limit_error(
+                "MEAL_PLAN_DAILY_LIMIT_REACHED",
+                "You have reached today's limit of 2 meal-plan generations.",
+            )
+        _enforce_meal_plan_short_rate_limit(user_id)
+        resp_profile = supabase.table("profiles").select("*").eq("user_id", user_id).execute()
+        profile = resp_profile.data[0] if resp_profile.data else None
+    else:
+        guest_id = _guest_id_or_error(req.device_id)
+        if _has_reached_guest_meal_plan_limit(guest_id):
+            raise _guest_limit_error(
+                "GUEST_MEAL_PLAN_LIMIT_REACHED",
+                "You have reached the lifetime limit of 3 guest meal-plan generations.",
+                GUEST_MEAL_PLAN_LIFETIME_LIMIT,
+            )
+        _enforce_meal_plan_short_rate_limit(f"guest:{guest_id}")
+        profile = None
 
-    days = max(1, min(7, req.days))
-    target_kcal = req.target_calories or (profile.get("daily_calorie_goal") if profile else 2000)
+    days = req.days
+    planning_targets = normalize_planning_targets(
+        profile=profile,
+        guest_targets=None if user else req.planning_targets,
+        calorie_override=req.target_calories,
+    )
+    target_kcal = round(planning_targets["calories"])
     try:
         data = await ai.generate_meal_plan(
             preset=req.preset, days=days, target_kcal=int(target_kcal),
             allergies=req.allergies, custom_prompt=req.custom_prompt,
             ingredients=req.ingredients, profile=profile, lang=req.lang,
+            planning_targets=planning_targets,
         )
     except AIProviderError as e:
         raise _ai_error(e, "Meal plan error")
 
     plan = MealPlanResponse(**data)
-    if not _record_successful_meal_plan_generation(user_id):
-        raise _meal_plan_limit_error(
-            "MEAL_PLAN_DAILY_LIMIT_REACHED",
-            "You have reached today's limit of 2 meal-plan generations.",
+    if user:
+        if not _record_successful_meal_plan_generation(user_id):
+            raise _meal_plan_limit_error(
+                "MEAL_PLAN_DAILY_LIMIT_REACHED",
+                "You have reached today's limit of 2 meal-plan generations.",
+            )
+    elif not _record_successful_guest_meal_plan_generation(guest_id):
+        raise _guest_limit_error(
+            "GUEST_MEAL_PLAN_LIMIT_REACHED",
+            "You have reached the lifetime limit of 3 guest meal-plan generations.",
+            GUEST_MEAL_PLAN_LIFETIME_LIMIT,
         )
     return plan
+
+
+@api_router.post("/pantry/extract", response_model=PantryExtractResponse)
+async def extract_pantry(
+    req: PantryExtractRequest,
+    authorization: Optional[str] = Header(None),
+):
+    if not req.image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 required")
+    if len(req.image_base64) > 8_000_000:
+        raise HTTPException(status_code=413, detail="image_base64 too large")
+
+    user = await _optional_current_user(authorization)
+    guest_id = None
+    if not user:
+        guest_id = _guest_id_or_error(req.device_id)
+        if _has_reached_guest_pantry_limit(guest_id):
+            raise _guest_limit_error(
+                "GUEST_PANTRY_LIMIT_REACHED",
+                "You have reached the lifetime limit of 1 guest pantry scan.",
+                GUEST_PANTRY_LIFETIME_LIMIT,
+            )
+        _enforce_guest_pantry_short_rate_limit(guest_id)
+
+    try:
+        data = await ai.extract_pantry(image_base64=req.image_base64, lang=req.lang)
+    except AIProviderError as e:
+        raise _ai_error(e, "Pantry scan error")
+
+    result = PantryExtractResponse(**data)
+    if guest_id and not _record_successful_guest_pantry_scan(guest_id):
+        raise _guest_limit_error(
+            "GUEST_PANTRY_LIMIT_REACHED",
+            "You have reached the lifetime limit of 1 guest pantry scan.",
+            GUEST_PANTRY_LIFETIME_LIMIT,
+        )
+    return result
 
 
 @api_router.post("/meal-plans", response_model=SavedMealPlan)
@@ -696,7 +921,7 @@ class ProgramRequest(BaseModel):
     device_id: Optional[str] = None          # kept for compatibility, ignored
     goal: Literal["forza", "ipertrofia", "dimagrimento", "resistenza", "mobilita"] = "ipertrofia"
     level: Literal["principiante", "intermedio", "avanzato"] = "intermedio"
-    days_per_week: int = 4
+    days_per_week: int = Field(default=4, ge=1, le=7)
     equipment: Literal["palestra_completa", "casa_manubri", "corpo_libero", "outdoor"] = "palestra_completa"
     focus_areas: str = ""
     plateau_info: str = ""
@@ -704,13 +929,13 @@ class ProgramRequest(BaseModel):
 
 class WorkoutExercise(BaseModel):
     name: str
-    sets: int
+    sets: int = Field(ge=1)
     reps: str
-    rest_sec: int
+    rest_sec: int = Field(ge=0, le=600)
     notes: str = ""
 
 class WorkoutDay(BaseModel):
-    day: int
+    day: int = Field(ge=1)
     label: str
     focus: str
     exercises: List[WorkoutExercise]

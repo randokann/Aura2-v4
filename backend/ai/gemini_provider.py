@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from google import genai
 
-from .base import AIProvider, AIProviderError, extract_json
+from .base import AIProvider, AIProviderError, AIResponseFormatError, extract_json
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,8 @@ class GeminiProvider(AIProvider):
 
             return extract_json(response.text)
 
+        except AIResponseFormatError:
+            raise
         except Exception as e:
             logger.exception("Gemini API error")
             raise AIProviderError(f"Gemini failed: {str(e)}")
