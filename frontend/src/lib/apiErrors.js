@@ -18,7 +18,6 @@ const QUOTA_CODES = new Set([
 ]);
 
 const RATE_LIMIT_CODES = new Set([
-    "GUEST_MEAL_PLAN_RATE_LIMITED",
     "MEAL_PLAN_RATE_LIMITED",
     "GUEST_PANTRY_RATE_LIMITED",
 ]);

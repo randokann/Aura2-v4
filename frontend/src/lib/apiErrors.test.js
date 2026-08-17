@@ -21,7 +21,6 @@ describe("classifyApiError", () => {
     });
 
     test.each([
-        "GUEST_MEAL_PLAN_RATE_LIMITED",
         "MEAL_PLAN_RATE_LIMITED",
         "GUEST_PANTRY_RATE_LIMITED",
     ])("classifies cooldown code %s", (code) => {
