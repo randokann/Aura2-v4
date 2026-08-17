@@ -16,6 +16,7 @@ import {
     RETRY_LATER_MESSAGE,
     classifyApiError,
     getApiErrorMessage,
+    isNoInternetError,
 } from "../lib/apiErrors";
 
 const PRESETS = ["bilanciato", "iperproteico", "ipocalorico", "ipercalorico", "keto", "mediterraneo", "vegetariano", "vegano", "custom", "ingredients"];
@@ -110,7 +111,7 @@ export const MealPlanPage = ({ profile }) => {
             else toast.info(t("plans.no_saved") /* no new items */);
         } catch (e) {
             const error = classifyApiError(e);
-            if (error.kind === API_ERROR_KIND.OFFLINE) {
+            if (isNoInternetError(e)) {
                 toast.error(OFFLINE_MESSAGE);
             } else if (error.code === "GUEST_PANTRY_LIMIT_REACHED") {
                 setUpgradeContext("pantry");
@@ -143,7 +144,7 @@ export const MealPlanPage = ({ profile }) => {
             toast.success(t("plans.generated"));
         } catch (e) {
             const error = classifyApiError(e);
-            if (error.kind === API_ERROR_KIND.OFFLINE) {
+            if (isNoInternetError(e)) {
                 toast.error(OFFLINE_MESSAGE);
             } else if (error.code === "GUEST_MEAL_PLAN_LIMIT_REACHED") {
                 setUpgradeContext("meal-plan");

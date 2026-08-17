@@ -16,6 +16,10 @@ class AIProviderError(Exception):
     """Raised when the underlying AI provider fails (network, quota, invalid JSON)."""
 
 
+class AIUpstreamConnectionError(AIProviderError):
+    """Raised when no network connection can be established to the AI provider."""
+
+
 class AIResponseFormatError(AIProviderError):
     """Raised when a provider response cannot be parsed as the requested JSON."""
 

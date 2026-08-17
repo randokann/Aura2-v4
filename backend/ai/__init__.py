@@ -14,10 +14,16 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
-from .base import AIProvider, AIProviderError
+from .base import AIProvider, AIProviderError, AIUpstreamConnectionError
 from .service import AIService
 
-__all__ = ["get_ai_service", "AIProvider", "AIProviderError", "AIService"]
+__all__ = [
+    "get_ai_service",
+    "AIProvider",
+    "AIProviderError",
+    "AIUpstreamConnectionError",
+    "AIService",
+]
 
 
 def _build_provider() -> AIProvider:

@@ -1,13 +1,41 @@
 from __future__ import annotations
 
 import logging
+import socket
 from typing import List, Optional
 
+import httpx
 from google import genai
 
-from .base import AIProvider, AIProviderError, AIResponseFormatError, extract_json
+from .base import (
+    AIProvider,
+    AIProviderError,
+    AIResponseFormatError,
+    AIUpstreamConnectionError,
+    extract_json,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _is_connectivity_error(error: BaseException) -> bool:
+    """Recognize failures that occurred before Gemini returned an HTTP response."""
+    current: Optional[BaseException] = error
+    seen: set[int] = set()
+    connectivity_types = (
+        httpx.ConnectError,
+        httpx.ConnectTimeout,
+        socket.gaierror,
+        ConnectionError,
+    )
+
+    while current is not None and id(current) not in seen:
+        if isinstance(current, connectivity_types):
+            return True
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+
+    return False
 
 
 class GeminiProvider(AIProvider):
@@ -63,4 +91,8 @@ class GeminiProvider(AIProvider):
             raise
         except Exception as e:
             logger.exception("Gemini API error")
-            raise AIProviderError(f"Gemini failed: {str(e)}")
+            if _is_connectivity_error(e):
+                raise AIUpstreamConnectionError(
+                    "Could not establish a network connection to Gemini"
+                ) from e
+            raise AIProviderError(f"Gemini failed: {str(e)}") from e

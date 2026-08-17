@@ -24,7 +24,7 @@ from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
-from ai import get_ai_service, AIProviderError
+from ai import get_ai_service, AIProviderError, AIUpstreamConnectionError
 from ai.constants import recovery_status_for
 
 app = FastAPI()
@@ -205,6 +205,19 @@ def compute_bmi(weight_kg: float, height_cm: float):
 def _ai_error(e: Exception, generic: str = "AI error") -> HTTPException:
     """Return a stable HTTP error when the provider request fails."""
     logger.error("%s: %s", generic, e)
+    current: Optional[BaseException] = e
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        if isinstance(current, AIUpstreamConnectionError):
+            return HTTPException(
+                status_code=503,
+                detail={
+                    "code": "AI_UPSTREAM_UNREACHABLE",
+                    "message": "The AI service could not be reached over the network.",
+                },
+            )
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
     return HTTPException(status_code=502, detail=generic)
 
 

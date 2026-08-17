@@ -1,5 +1,6 @@
 export const API_ERROR_KIND = Object.freeze({
     OFFLINE: "offline",
+    AI_UPSTREAM_UNREACHABLE: "ai_upstream_unreachable",
     QUOTA_LIMIT: "quota_limit",
     RATE_LIMIT: "rate_limit",
     AUTHENTICATION: "authentication",
@@ -21,6 +22,8 @@ const RATE_LIMIT_CODES = new Set([
     "MEAL_PLAN_RATE_LIMITED",
     "GUEST_PANTRY_RATE_LIMITED",
 ]);
+
+const AI_UPSTREAM_UNREACHABLE_CODE = "AI_UPSTREAM_UNREACHABLE";
 
 function responseDetail(error) {
     return error?.response?.data?.detail;
@@ -90,6 +93,9 @@ export function classifyApiError(error, options = {}) {
 
     // A real HTTP response is authoritative: 4xx/5xx responses are never labeled offline.
     if (hasValidHttpResponse(error)) {
+        if (code === AI_UPSTREAM_UNREACHABLE_CODE) {
+            return { kind: API_ERROR_KIND.AI_UPSTREAM_UNREACHABLE, code, status };
+        }
         if (QUOTA_CODES.has(code)) {
             return { kind: API_ERROR_KIND.QUOTA_LIMIT, code, status };
         }
@@ -109,8 +115,14 @@ export function classifyApiError(error, options = {}) {
     return { kind: API_ERROR_KIND.UNEXPECTED, code: null, status: null };
 }
 
+export function isNoInternetError(error, options) {
+    const kind = classifyApiError(error, options).kind;
+    return kind === API_ERROR_KIND.OFFLINE
+        || kind === API_ERROR_KIND.AI_UPSTREAM_UNREACHABLE;
+}
+
 export function getAiRequestErrorMessage(error, fallback, options) {
-    return classifyApiError(error, options).kind === API_ERROR_KIND.OFFLINE
+    return isNoInternetError(error, options)
         ? OFFLINE_MESSAGE
         : getApiErrorMessage(error, fallback);
 }

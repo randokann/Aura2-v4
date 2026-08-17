@@ -4,6 +4,7 @@ import {
     classifyApiError,
     getAiRequestErrorMessage,
     getApiErrorMessage,
+    isNoInternetError,
 } from "./apiErrors";
 
 function responseError(status, detail) {
@@ -68,6 +69,33 @@ describe("classifyApiError", () => {
     test("never labels an HTTP 502 response as offline", () => {
         expect(classifyApiError(responseError(502, "Food analysis error"), { online: false }).kind)
             .toBe(API_ERROR_KIND.BACKEND);
+    });
+
+    test("maps only the explicit upstream-unreachable response to no-internet UX", () => {
+        const error = responseError(503, {
+            code: "AI_UPSTREAM_UNREACHABLE",
+            message: "AI provider unavailable",
+        });
+        expect(classifyApiError(error, { online: true })).toMatchObject({
+            kind: API_ERROR_KIND.AI_UPSTREAM_UNREACHABLE,
+            code: "AI_UPSTREAM_UNREACHABLE",
+            status: 503,
+        });
+        expect(isNoInternetError(error, { online: true })).toBe(true);
+        expect(getAiRequestErrorMessage(error, "Food analysis failed"))
+            .toBe(OFFLINE_MESSAGE);
+    });
+
+    test("does not map a generic backend 502 to no-internet UX", () => {
+        const error = responseError(502, "Gemini request failed");
+        expect(isNoInternetError(error, { online: false })).toBe(false);
+        expect(getAiRequestErrorMessage(error, "fallback", { online: false }))
+            .toBe("Gemini request failed");
+    });
+
+    test.each([401, 403, 429])("keeps a provider HTTP %s response non-offline", (status) => {
+        const error = responseError(status, { message: "Provider rejected request" });
+        expect(isNoInternetError(error, { online: false })).toBe(false);
     });
 
     test("classifies a generic HTTP 500 response as backend", () => {
