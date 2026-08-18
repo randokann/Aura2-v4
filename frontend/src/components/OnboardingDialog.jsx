@@ -3,7 +3,8 @@ import { Sparkles, ArrowRight, Languages } from "lucide-react";
 import { useLang } from "../i18n/LangContext";
 import { LANGUAGES } from "../i18n/languages";
 import { sectionStyle } from "../lib/sectionColors";
-import { supabase } from "../lib/supabase";
+import { EmailAuthDialog } from "./EmailAuthDialog";
+import { savePendingOnboarding } from "../lib/pendingOnboarding";
 
 export const OnboardingDialog = ({ onSubmit }) => {
     const { t, lang, setLang } = useLang();
@@ -20,8 +21,6 @@ export const OnboardingDialog = ({ onSubmit }) => {
     });
     const [accountMethod, setAccountMethod] = useState(null); // null | 'google' | 'email' | 'guest'
     const [showEmailModal, setShowEmailModal] = useState(false);
-    const [emailValue, setEmailValue] = useState("");
-    const PENDING_ONBOARDING_KEY = "pending_onboarding_form_v1";
 
     const update = (k, v) => setForm((s) => ({ ...s, [k]: v }));
     const next = () => setStep((s) => s + 1);
@@ -36,51 +35,15 @@ export const OnboardingDialog = ({ onSubmit }) => {
         return "mantenere";
     };
 
-    const startGoogleAuth = async () => {
-        try {
-            // Persist pending form so App.finishOnboarding can pick it up on redirect
-            try {
-                const payload = { ...form };
-                payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
-                localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(payload));
-            } catch (e) {
-                console.warn("Failed to persist pending onboarding form:", e);
-            }
-            await supabase.auth.signInWithOAuth({ provider: "google" });
-        } catch (e) {
-            console.error("Google sign-in failed:", e);
-        }
-    };
-
-    const openEmailPlaceholder = () => {
-        // Persist pending form so we have it available when the user completes email signup later
-        try {
-            const payload = { ...form };
-            payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
-            localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(payload));
-        } catch (e) {
-            console.warn("Failed to persist pending onboarding form:", e);
-        }
-        setShowEmailModal(true);
-    };
-
     const selectAccount = (method) => {
         // Only update visual selection. Do not start auth here.
         setAccountMethod(method);
     };
 
-    const submitEmailPlaceholder = () => {
-        // In a real flow we'd call supabase.auth.signInWithOtp({ email: emailValue }) or similar.
-        // For now just show a simple success and close modal.
-        try {
-            // persist the email alongside pending form (optional)
-            localStorage.setItem("pending_onboarding_email_v1", emailValue);
-        } catch (e) {
-            console.warn("Failed to persist pending email:", e);
-        }
-        setShowEmailModal(false);
-        // Optionally navigate to another UI state: keep it simple and show a small toast in future.
-        console.log("Email signup placeholder: would send magic link to", emailValue);
+    const persistEmailOnboarding = () => {
+        const payload = { ...form };
+        payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+        savePendingOnboarding(payload, "email");
     };
 
     const steps = [
@@ -254,27 +217,12 @@ export const OnboardingDialog = ({ onSubmit }) => {
                         </button>
                     </div>
 
-                    {/* Email placeholder modal */}
-                    {showEmailModal && (
-                        <div className="fixed inset-0 z-60 flex items-center justify-center px-4">
-                            <div className="absolute inset-0 bg-black/50" onClick={() => setShowEmailModal(false)} />
-                            <div className="relative max-w-md w-full bg-[color:var(--bg-default)] rounded-2xl p-6 border border-white/5">
-                                <h2 className="font-display text-2xl mb-2">Sign up with Email</h2>
-                                <p className="text-sm text-[color:var(--text-secondary)] mb-4">Enter your email and we'll send a magic link (placeholder).</p>
-                                <input
-                                    type="email"
-                                    value={emailValue}
-                                    onChange={(e) => setEmailValue(e.target.value)}
-                                    placeholder="you@example.com"
-                                    className="w-full bg-[color:var(--bg-elevated)] rounded-2xl px-4 py-3 outline-none mb-4"
-                                />
-                                <div className="flex gap-3">
-                                    <button className="flex-1 btn-tactile py-3 rounded-2xl bg-[color:var(--action-primary)] text-[color:var(--bg-default)]" onClick={submitEmailPlaceholder}>Continue</button>
-                                    <button className="flex-1 btn-tactile py-3 rounded-2xl bg-[color:var(--bg-elevated)]" onClick={() => setShowEmailModal(false)}>Cancel</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    <EmailAuthDialog
+                        open={showEmailModal}
+                        onOpenChange={setShowEmailModal}
+                        beforeRequest={persistEmailOnboarding}
+                        title="Sign up with Email"
+                    />
                 </div>
             ),
         },
@@ -337,7 +285,7 @@ export const OnboardingDialog = ({ onSubmit }) => {
                                         payload.accountMethod = accountMethod;
                                         onSubmit?.(payload);
                                     } else if (accountMethod === 'email') {
-                                        openEmailPlaceholder();
+                                        setShowEmailModal(true);
                                     } else if (accountMethod === 'guest') {
                                         // Guest selected: complete onboarding immediately without authenticating.
                                         const payload = { ...form };

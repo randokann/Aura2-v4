@@ -9,6 +9,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "./ui/dialog";
+import { EmailAuthDialog } from "./EmailAuthDialog";
 import { supabase } from "../lib/supabase";
 import {
     API_ERROR_KIND,
@@ -45,6 +46,7 @@ function FeatureList({ items }) {
 
 export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) {
     const [signingIn, setSigningIn] = useState(false);
+    const [emailOpen, setEmailOpen] = useState(false);
     const pantryContext = context === "pantry";
 
     const startGoogleSignIn = async () => {
@@ -65,6 +67,7 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
     };
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 data-testid="upgrade-plan-modal"
@@ -122,7 +125,7 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
 
                 <div className="space-y-2 pt-2 text-center">
                     <p className="text-xs text-[color:var(--text-secondary)]">
-                        Create an Aura2 account with Google to continue on the upgrade path. No paid plan is activated.
+                        Create an Aura2 account with Google or Email to continue. No paid plan is activated.
                     </p>
                     <button
                         data-testid="upgrade-google-cta"
@@ -136,10 +139,14 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                     <button
                         data-testid="upgrade-email-cta"
                         type="button"
-                        disabled
-                        className="w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3 text-sm text-[color:var(--text-secondary)] opacity-70"
+                        disabled={signingIn}
+                        onClick={() => {
+                            onOpenChange(false);
+                            setEmailOpen(true);
+                        }}
+                        className="btn-tactile w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3 text-sm text-[color:var(--text-primary)] disabled:opacity-60"
                     >
-                        Email sign-in — coming soon
+                        Continue with Email
                     </button>
                     <DialogClose asChild>
                         <button
@@ -152,5 +159,11 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                 </div>
             </DialogContent>
         </Dialog>
+        <EmailAuthDialog
+            open={emailOpen}
+            onOpenChange={setEmailOpen}
+            title="Continue with Email"
+        />
+        </>
     );
 }

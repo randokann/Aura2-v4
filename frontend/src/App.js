@@ -1,7 +1,7 @@
 import { supabase } from "./lib/supabase";
 import { useAuth } from "./auth/AuthProvider";
-import { useEffect, useState, useCallback } from "react";
-import { Toaster } from "sonner";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Toaster, toast } from "sonner";
 import "@/App.css";
 import { BottomNav } from "@/components/BottomNav";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
@@ -14,6 +14,12 @@ import { LangProvider, useLang } from "@/i18n/LangContext";
 import { sectionStyle } from "@/lib/sectionColors";
 import { getDeviceId, getProfile, saveProfile, associateDevice } from "@/lib/api";
 import { getGuestProfile, saveGuestProfile } from "@/lib/guestStorage";
+import {
+    clearPendingOnboarding,
+    readPendingOnboarding,
+    resolveAuthenticatedOnboarding,
+    savePendingOnboarding,
+} from "@/lib/pendingOnboarding";
 
 // Compute derived nutrition/BMI fields from raw profile inputs.
 // Mirrors the logic in ProfilePage.computeProfileGoals so guests always
@@ -75,13 +81,16 @@ function ensureGuestProfileGoals(p) {
 
 function Shell() {
     const { t } = useLang();
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, authError, clearAuthError } = useAuth();
     console.log("AUTH USER:", user);
     const [tab, setTab] = useState("diario");
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [profileSyncError, setProfileSyncError] = useState("");
+    const [profileSyncAttempt, setProfileSyncAttempt] = useState(0);
+    const profileSyncInFlightRef = useRef(null);
 
     const restoreGuestProfile = useCallback(() => {
         if (user) return false;
@@ -110,38 +119,73 @@ function Shell() {
         }
     }, [user]);
 
-    const loadProfile = useCallback(async () => {
-        if (restoreGuestProfile()) {
-            return;
-        }
-
-        try {
-            const p = await getProfile(getDeviceId());
-            setProfile(p);
-            setShowOnboarding(!p);
-        } catch (e) {
-            console.error("Failed to load profile:", e);
-            // If the backend requires authentication (401), we should show onboarding
-            // so the user can sign in and complete the flow.
-            // Axios errors expose response.status; otherwise fallback to showing onboarding
-            const status = e?.response?.status;
-            if (status === 401) {
-                setShowOnboarding(true);
-            } else {
-                // For other errors (network), be conservative and show onboarding as well
-                // so users can attempt to continue. This mirrors previous UX where missing
-                // profile led to onboarding flow.
-                setShowOnboarding(true);
-            }
-        } finally {
-            setLoading(false);
-        }
-    }, [restoreGuestProfile]);
-
     useEffect(() => {
         if (authLoading) return;
-        loadProfile();
-    }, [authLoading, loadProfile]);
+        let active = true;
+
+        async function synchronizeProfile() {
+            setProfileSyncError("");
+
+            if (!user) {
+                if (!restoreGuestProfile() && active) {
+                    setProfile(null);
+                    setShowOnboarding(true);
+                    setLoading(false);
+                }
+                return;
+            }
+
+            setLoading(true);
+            const userId = user.id;
+            let operation = profileSyncInFlightRef.current;
+
+            if (!operation || operation.userId !== userId) {
+                const pending = readPendingOnboarding();
+                const promise = resolveAuthenticatedOnboarding({
+                    pending,
+                    loadExistingProfile: () => getProfile(getDeviceId()),
+                    saveNewProfile: (pendingForm) => saveProfile({ ...pendingForm }),
+                    clearPending: () => clearPendingOnboarding(),
+                });
+                operation = { userId, promise, hasPending: Boolean(pending) };
+                profileSyncInFlightRef.current = operation;
+            }
+
+            try {
+                const result = await operation.promise;
+                if (!active) return;
+
+                setProfile(result.profile);
+                setShowOnboarding(result.status === "missing");
+                if (result.status === "created") setTab("fotocamera");
+            } catch (error) {
+                console.error("Failed to synchronize authenticated profile:", error);
+                if (active) {
+                    setProfileSyncError(
+                        operation.hasPending
+                            ? "We couldn't finish setting up your profile. Your onboarding data is safe; try again."
+                            : "We couldn't load your profile. Please try again."
+                    );
+                }
+            } finally {
+                if (profileSyncInFlightRef.current === operation) {
+                    profileSyncInFlightRef.current = null;
+                }
+                if (active) setLoading(false);
+            }
+        }
+
+        synchronizeProfile();
+        return () => {
+            active = false;
+        };
+    }, [authLoading, profileSyncAttempt, restoreGuestProfile, user]);
+
+    useEffect(() => {
+        if (!authError) return;
+        toast.error(authError);
+        clearAuthError();
+    }, [authError, clearAuthError]);
 
     useEffect(() => {
     async function migrateDeviceData() {
@@ -158,9 +202,6 @@ function Shell() {
     migrateDeviceData();
 }, [user]);
     
-    // Key used to persist onboarding form across OAuth redirect
-    const PENDING_ONBOARDING_KEY = "pending_onboarding_form_v1";
-
     // When finishing onboarding: if already authenticated, save immediately.
     // Otherwise persist the form and start OAuth sign-in; the pending form will be
     // completed after the auth listener detects a session.
@@ -205,62 +246,50 @@ function Shell() {
             if (user) {
                 // Authenticated: call saveProfile directly. Do not include device_id —
                 // interceptor will attach Authorization header and backend expects JWT.
-                const p = await saveProfile({ ...form });
+                const profileForm = { ...form };
+                delete profileForm.accountMethod;
+                const p = await saveProfile(profileForm);
                 setProfile(p);
                 setShowOnboarding(false);
                 setTab("fotocamera");
             } else {
-                try {
-                    localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(form));
-                } catch (e) {
-                    console.warn("Failed to persist pending onboarding form:", e);
-                }
+                savePendingOnboarding(form, "google");
 
                 // Trigger OAuth sign-in (redirect). After redirect back the AuthProvider
-                // will update `user` and the effect below will complete the onboarding.
-                await supabase.auth.signInWithOAuth({ provider: "google" });
+                // will update `user` and profile synchronization will complete onboarding.
+                const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+                if (error) throw error;
             }
         } catch (e) {
             console.error(e);
         }
     };
 
-    // Complete pending onboarding after sign-in
-    useEffect(() => {
-        async function completePendingOnboarding() {
-            if (!user) return;
-
-            let raw = null;
-            try {
-                raw = localStorage.getItem(PENDING_ONBOARDING_KEY);
-            } catch (e) {
-                console.warn("Failed to read pending onboarding form:", e);
-                raw = null;
-            }
-            if (!raw) return;
-
-            try {
-                const pendingForm = JSON.parse(raw);
-                // Remove early to avoid double-submit
-                localStorage.removeItem(PENDING_ONBOARDING_KEY);
-
-                const p = await saveProfile({ ...pendingForm });
-                setProfile(p);
-                setShowOnboarding(false);
-                setTab("fotocamera");
-            } catch (e) {
-                console.error("Failed to complete pending onboarding after sign-in:", e);
-            }
-        }
-
-        completePendingOnboarding();
-    }, [user]);
-
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-[color:var(--text-secondary)] text-sm tracking-overline uppercase">
                     {t("common.loading")}
+                </div>
+            </div>
+        );
+    }
+
+    if (profileSyncError && user) {
+        return (
+            <div className="min-h-screen flex items-center justify-center px-6">
+                <div className="glass max-w-md rounded-3xl p-6 text-center">
+                    <h1 className="font-display text-2xl font-semibold">Profile setup paused</h1>
+                    <p className="mt-3 text-sm text-[color:var(--text-secondary)]">
+                        {profileSyncError}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => setProfileSyncAttempt((attempt) => attempt + 1)}
+                        className="btn-tactile mt-5 w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)]"
+                    >
+                        Try again
+                    </button>
                 </div>
             </div>
         );
