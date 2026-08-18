@@ -1,11 +1,24 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Save, Activity, Target, Ruler, Scale, Languages } from "lucide-react";
+import {
+    Save,
+    Activity,
+    Target,
+    Ruler,
+    Scale,
+    Languages,
+    CheckCircle2,
+    Cloud,
+    Loader2,
+    Mail,
+} from "lucide-react";
 import { saveProfile, getDeviceId } from "../lib/api";
 import { isGuestMode, getGuestProfile, saveGuestProfile } from "../lib/guestStorage";
+import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/AuthProvider";
 import { useLang } from "../i18n/LangContext";
 import { LANGUAGES } from "../i18n/languages";
+import { EmailAuthDialog } from "../components/EmailAuthDialog";
 
 function computeBmi(weightKg, heightCm) {
     const heightM = heightCm / 100;
@@ -90,13 +103,28 @@ export const ProfilePage = ({ profile, onUpdated }) => {
         goal: profile?.goal || "mantenere",
     });
     const [saving, setSaving] = useState(false);
+    const [googleSigningIn, setGoogleSigningIn] = useState(false);
+    const [emailAuthOpen, setEmailAuthOpen] = useState(false);
+    const guestMode = !user && isGuestMode();
     const upd = (k, v) => setForm((s) => ({ ...s, [k]: v }));
+
+    const startGoogleSignIn = async () => {
+        if (googleSigningIn) return;
+        setGoogleSigningIn(true);
+
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+            if (error) throw error;
+        } catch (error) {
+            console.error("Google sign-in failed to start:", error);
+            toast.error("Google sign-in couldn't start. Please try again.");
+            setGoogleSigningIn(false);
+        }
+    };
 
     const save = async () => {
         setSaving(true);
         try {
-            const guestMode = !user && isGuestMode();
-
             if (guestMode) {
                 const existingGuestProfile = getGuestProfile() || profile || {};
                 const updatedGuestProfile = {
@@ -170,6 +198,78 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                         <MacroStat label={t("profile.fiber_short")} value={Math.round(profile.fiber_goal)} color="var(--macro-fiber)" />
                     </div>
                 </div>
+            )}
+
+            {guestMode && (
+                <section data-testid="profile-account-section" className="glass rounded-3xl p-6 mb-6">
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[color:var(--action-primary)]/15 text-[color:var(--action-primary)]">
+                            <Cloud size={20} />
+                        </div>
+                        <div>
+                            <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">
+                                Account &amp; sync
+                            </div>
+                            <h2 className="font-display text-xl font-semibold mt-1">
+                                Save &amp; sync your progress
+                            </h2>
+                            <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mt-2">
+                                Create or sign in to a Flaro account to keep your profile, meals, workouts and plans across devices.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 mt-5">
+                        <button
+                            type="button"
+                            data-testid="profile-account-google"
+                            disabled={googleSigningIn}
+                            onClick={startGoogleSignIn}
+                            className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)] flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                            {googleSigningIn && <Loader2 size={17} className="animate-spin" />}
+                            {googleSigningIn ? "Opening Google sign-in…" : "Continue with Google"}
+                        </button>
+                        <button
+                            type="button"
+                            data-testid="profile-account-email"
+                            disabled={googleSigningIn}
+                            onClick={() => setEmailAuthOpen(true)}
+                            className="btn-tactile w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold text-[color:var(--text-primary)] flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                            <Mail size={17} />
+                            Continue with Email
+                        </button>
+                    </div>
+
+                    <p className="text-xs leading-relaxed text-[color:var(--text-secondary)] mt-4">
+                        Your current guest data stays on this device until account sync completes.
+                    </p>
+                </section>
+            )}
+
+            {user && (
+                <section data-testid="profile-account-section" className="glass rounded-3xl p-6 mb-6">
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[color:var(--action-primary)]/15 text-[color:var(--action-primary)]">
+                            <CheckCircle2 size={20} />
+                        </div>
+                        <div className="min-w-0">
+                            <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">
+                                Account &amp; sync
+                            </div>
+                            <h2 className="font-display text-xl font-semibold mt-1">Account connected</h2>
+                            <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mt-2">
+                                You're signed in to Flaro on this device.
+                            </p>
+                            {user.email && (
+                                <p data-testid="profile-account-email-address" className="text-sm font-medium mt-2 truncate">
+                                    {user.email}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </section>
             )}
 
             <div className="space-y-5">
@@ -267,6 +367,14 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                     <Save size={18} /> {saving ? t("common.saving") : t("profile.save_btn")}
                 </button>
             </div>
+
+            {guestMode && (
+                <EmailAuthDialog
+                    open={emailAuthOpen}
+                    onOpenChange={setEmailAuthOpen}
+                    title="Continue with Email"
+                />
+            )}
         </div>
     );
 };
