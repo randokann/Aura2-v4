@@ -10,6 +10,7 @@ import { DiaryPage } from "@/pages/DiaryPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { MealPlanPage } from "@/pages/MealPlanPage";
 import { CoachPage } from "@/pages/CoachPage";
+import { EmailAuthCallback } from "@/pages/EmailAuthCallback";
 import { LangProvider, useLang } from "@/i18n/LangContext";
 import { sectionStyle } from "@/lib/sectionColors";
 import { getDeviceId, getProfile, saveProfile, associateDevice } from "@/lib/api";
@@ -17,8 +18,8 @@ import { getGuestProfile, saveGuestProfile } from "@/lib/guestStorage";
 import {
     clearPendingOnboarding,
     readPendingOnboarding,
-    resolveAuthenticatedOnboarding,
     savePendingOnboarding,
+    synchronizeAuthenticatedOnboarding,
 } from "@/lib/pendingOnboarding";
 
 // Compute derived nutrition/BMI fields from raw profile inputs.
@@ -141,8 +142,9 @@ function Shell() {
 
             if (!operation || operation.userId !== userId) {
                 const pending = readPendingOnboarding();
-                const promise = resolveAuthenticatedOnboarding({
-                    pending,
+                const promise = synchronizeAuthenticatedOnboarding({
+                    userId,
+                    readPending: () => readPendingOnboarding(),
                     loadExistingProfile: () => getProfile(getDeviceId()),
                     saveNewProfile: (pendingForm) => saveProfile({ ...pendingForm }),
                     clearPending: () => clearPendingOnboarding(),
@@ -208,7 +210,7 @@ function Shell() {
     const finishOnboarding = async (form) => {
         try {
             // Guest local-only mode: create a local profile and mark guest mode
-            if (form?.accountMethod === "guest") {
+            if (!user && form?.accountMethod === "guest") {
                 try {
                     const guestProfile = { ...form };
                     // Remove accountMethod before storing
@@ -321,7 +323,12 @@ function Shell() {
                 }}
             />
 
-            {showOnboarding && <OnboardingDialog onSubmit={finishOnboarding} />}
+            {showOnboarding && (
+                <OnboardingDialog
+                    authenticated={Boolean(user)}
+                    onSubmit={finishOnboarding}
+                />
+            )}
 
             <div className="max-w-md mx-auto relative">
                 {tab === "diario" && <DiaryPage profile={profile} refreshKey={refreshKey} />}
@@ -344,10 +351,16 @@ function Shell() {
     );
 }
 
+export function isEmailAuthCallbackPath(pathname) {
+    const currentPath = pathname
+        ?? (typeof window === "undefined" ? "" : window.location.pathname);
+    return currentPath === "/auth/callback" || currentPath === "/auth/callback/";
+}
+
 function App() {
     return (
         <LangProvider>
-            <Shell />
+            {isEmailAuthCallbackPath() ? <EmailAuthCallback /> : <Shell />}
         </LangProvider>
     );
 }

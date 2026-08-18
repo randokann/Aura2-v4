@@ -12,7 +12,7 @@ export class EmailValidationError extends Error {}
 export function emailRedirectUrl(locationObject) {
     const location = locationObject
         ?? (typeof window === "undefined" ? null : window.location);
-    return location?.origin ? `${location.origin}/` : undefined;
+    return location?.origin ? `${location.origin}/auth/callback` : undefined;
 }
 
 export async function requestEmailMagicLink({

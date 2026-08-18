@@ -4,6 +4,8 @@ export const PENDING_ONBOARDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const LEGACY_PENDING_EMAIL_KEY = "pending_onboarding_email_v1";
 
 const AUTH_METHODS = new Set(["email", "google"]);
+const AUTHENTICATED_ONBOARDING_LOCK = "flaro-authenticated-onboarding";
+const authenticatedOnboardingOperations = new Map();
 const PROFILE_FIELDS = [
     "name",
     "age",
@@ -123,4 +125,51 @@ export async function resolveAuthenticatedOnboarding({
     const profile = await saveNewProfile(pending.form);
     clearPending();
     return { status: "created", profile };
+}
+
+/**
+ * Run the existing profile-resolution flow once per authenticated user in this
+ * tab. Web Locks also serialize the same operation across callback/original
+ * tabs when the browser supports them, so the second tab observes the profile
+ * created by the first instead of submitting it again.
+ */
+export function synchronizeAuthenticatedOnboarding({
+    userId,
+    readPending = readPendingOnboarding,
+    loadExistingProfile,
+    saveNewProfile,
+    clearPending = clearPendingOnboarding,
+    lockManager = typeof navigator === "undefined" ? null : navigator.locks,
+}) {
+    if (!userId) {
+        return Promise.reject(new Error("An authenticated user is required"));
+    }
+
+    const currentOperation = authenticatedOnboardingOperations.get(userId);
+    if (currentOperation) return currentOperation;
+
+    const resolveProfile = () => resolveAuthenticatedOnboarding({
+        pending: readPending(),
+        loadExistingProfile,
+        saveNewProfile,
+        clearPending,
+    });
+
+    const operation = Promise.resolve().then(() => (
+        typeof lockManager?.request === "function"
+            ? lockManager.request(AUTHENTICATED_ONBOARDING_LOCK, resolveProfile)
+            : resolveProfile()
+    ));
+
+    authenticatedOnboardingOperations.set(userId, operation);
+    operation.finally(() => {
+        if (authenticatedOnboardingOperations.get(userId) === operation) {
+            authenticatedOnboardingOperations.delete(userId);
+        }
+    }).catch(() => {
+        // The caller owns the original rejection; avoid an unhandled rejection
+        // from the cleanup-only promise returned by finally().
+    });
+
+    return operation;
 }

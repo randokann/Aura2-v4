@@ -85,4 +85,27 @@ describe("AuthProvider", () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     root = null;
   });
+
+  test("updates an already-open app tab when Supabase broadcasts sign-in", async () => {
+    const states = [];
+    await act(async () => {
+      root.render(
+        <AuthProvider>
+          <Probe onChange={(state) => states.push(state)} />
+        </AuthProvider>
+      );
+    });
+
+    const callbackTabSession = {
+      access_token: "shared-browser-token",
+      user: { id: "email-user", email: "email@example.com" },
+    };
+    await act(async () => authCallback("SIGNED_IN", callbackTabSession));
+
+    expect(states.at(-1)).toMatchObject({
+      user: callbackTabSession.user,
+      session: callbackTabSession,
+      loading: false,
+    });
+  });
 });

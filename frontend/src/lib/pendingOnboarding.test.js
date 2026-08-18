@@ -5,6 +5,7 @@ import {
     readPendingOnboarding,
     resolveAuthenticatedOnboarding,
     savePendingOnboarding,
+    synchronizeAuthenticatedOnboarding,
 } from "./pendingOnboarding";
 
 const FORM = {
@@ -109,5 +110,56 @@ describe("pending onboarding", () => {
         expect(result).toEqual({ status: "existing", profile: existing });
         expect(saveNewProfile).not.toHaveBeenCalled();
         expect(clearPending).toHaveBeenCalledTimes(1);
+    });
+
+    test("coalesces duplicate completion attempts for the same authenticated user", async () => {
+        let finishSave;
+        const saveNewProfile = jest.fn(() => new Promise((resolve) => {
+            finishSave = resolve;
+        }));
+        const readPending = jest.fn(() => ({ form: FORM }));
+        const loadExistingProfile = jest.fn(async () => null);
+        const clearPending = jest.fn();
+        const options = {
+            userId: "same-user",
+            readPending,
+            loadExistingProfile,
+            saveNewProfile,
+            clearPending,
+            lockManager: null,
+        };
+
+        const first = synchronizeAuthenticatedOnboarding(options);
+        const duplicate = synchronizeAuthenticatedOnboarding(options);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(duplicate).toBe(first);
+        expect(saveNewProfile).toHaveBeenCalledTimes(1);
+
+        finishSave({ user_id: "same-user", ...FORM });
+        await expect(first).resolves.toMatchObject({ status: "created" });
+        expect(clearPending).toHaveBeenCalledTimes(1);
+    });
+
+    test("uses a browser lock so another tab rechecks profile state before saving", async () => {
+        const lockManager = { request: jest.fn((_name, callback) => callback()) };
+        const existing = { user_id: "locked-user", name: "Existing" };
+        const saveNewProfile = jest.fn();
+
+        await expect(synchronizeAuthenticatedOnboarding({
+            userId: "locked-user",
+            readPending: () => null,
+            loadExistingProfile: async () => existing,
+            saveNewProfile,
+            clearPending: jest.fn(),
+            lockManager,
+        })).resolves.toEqual({ status: "existing", profile: existing });
+
+        expect(lockManager.request).toHaveBeenCalledWith(
+            "flaro-authenticated-onboarding",
+            expect.any(Function),
+        );
+        expect(saveNewProfile).not.toHaveBeenCalled();
     });
 });

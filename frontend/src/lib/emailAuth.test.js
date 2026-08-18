@@ -20,7 +20,7 @@ describe("passwordless email authentication", () => {
             email: "  USER@Example.com ",
             beforeRequest: async () => events.push(["persist"]),
             auth,
-            redirectTo: "http://localhost:3000/",
+            redirectTo: "http://localhost:3000/auth/callback",
         });
 
         expect(email).toBe("user@example.com");
@@ -30,7 +30,7 @@ describe("passwordless email authentication", () => {
                 email: "user@example.com",
                 options: {
                     shouldCreateUser: true,
-                    emailRedirectTo: "http://localhost:3000/",
+                    emailRedirectTo: "http://localhost:3000/auth/callback",
                 },
             }],
         ]);
@@ -45,7 +45,7 @@ describe("passwordless email authentication", () => {
 
     test("uses the running application origin for redirects", () => {
         expect(emailRedirectUrl({ origin: "http://localhost:4173" }))
-            .toBe("http://localhost:4173/");
+            .toBe("http://localhost:4173/auth/callback");
     });
 
     test("shows no-internet copy for a true fetch transport failure", () => {

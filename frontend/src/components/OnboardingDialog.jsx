@@ -6,7 +6,7 @@ import { sectionStyle } from "../lib/sectionColors";
 import { EmailAuthDialog } from "./EmailAuthDialog";
 import { savePendingOnboarding } from "../lib/pendingOnboarding";
 
-export const OnboardingDialog = ({ onSubmit }) => {
+export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
     const { t, lang, setLang } = useLang();
     const [step, setStep] = useState(0);
     const [form, setForm] = useState({
@@ -160,10 +160,16 @@ export const OnboardingDialog = ({ onSubmit }) => {
         },
         // New final step: Choose how you want to continue
         {
-            title: "Choose how you want to continue",
-            subtitle: "Sync your workouts, meals and AI coach across all your devices.",
+            title: authenticated ? "Finish your profile" : "Choose how you want to continue",
+            subtitle: authenticated
+                ? "Your email is confirmed. Complete this final step to enter Flaro."
+                : "Sync your workouts, meals and AI coach across all your devices.",
             colorSection: "profilo",
-            body: (
+            body: authenticated ? (
+                <div className="rounded-2xl bg-[color:var(--bg-elevated)] p-5 text-sm leading-relaxed text-[color:var(--text-secondary)]">
+                    You're already signed in. Your profile will be saved to this account when you continue.
+                </div>
+            ) : (
                 <div className="space-y-4">
                     <div className="text-sm text-[color:var(--text-secondary)]">
                         {"Create an Aura account to keep your data safe and available across devices. You can sign up with Google or use Email to create credentials."}
@@ -277,6 +283,12 @@ export const OnboardingDialog = ({ onSubmit }) => {
                             <button
                                 data-testid="onb-continue"
                                 onClick={() => {
+                                    if (authenticated) {
+                                        const payload = { ...form };
+                                        payload.goal = deriveGoal(payload.current_weight_kg, payload.target_weight_kg);
+                                        onSubmit?.(payload);
+                                        return;
+                                    }
                                     if (!accountMethod) return;
                                     if (accountMethod === 'google') {
                                         // Use centralized onSubmit so App handles persisting and sign-in flow
@@ -294,9 +306,9 @@ export const OnboardingDialog = ({ onSubmit }) => {
                                         onSubmit?.(payload);
                                     }
                                 }}
-                                disabled={!accountMethod}
+                                disabled={!authenticated && !accountMethod}
                                 className={`btn-tactile w-full py-4 rounded-full font-semibold flex items-center justify-center gap-2 ${
-                                    accountMethod ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)]" : "bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
+                                    authenticated || accountMethod ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)]" : "bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
                                 }`}
                             >
                                 {t("common.continue")}
