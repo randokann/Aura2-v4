@@ -41,8 +41,16 @@ export async function requestEmailMagicLink({
 }
 
 export function getEmailAuthErrorMessage(error, options = {}) {
+    const messages = {
+        invalidEmail: "Enter a valid email address.",
+        offline: OFFLINE_MESSAGE,
+        tooMany: "Too many email requests. Please wait a moment and try again.",
+        signupUnavailable: "Email sign-up is currently unavailable.",
+        sendFailed: "We couldn't send the magic link. Please try again.",
+        ...options.messages,
+    };
     if (error instanceof EmailValidationError) {
-        return "Enter a valid email address.";
+        return messages.invalidEmail;
     }
 
     const hasAuthHttpStatus = Number.isInteger(error?.status)
@@ -55,19 +63,19 @@ export function getEmailAuthErrorMessage(error, options = {}) {
         && error?.name === "AuthRetryableFetchError";
 
     if (classified.kind === API_ERROR_KIND.OFFLINE || retryableFetchFailure) {
-        return OFFLINE_MESSAGE;
+        return messages.offline;
     }
 
     const message = String(error?.message || "").toLowerCase();
     if (message.includes("invalid") && message.includes("email")) {
-        return "Enter a valid email address.";
+        return messages.invalidEmail;
     }
     if (message.includes("rate limit") || message.includes("too many")) {
-        return "Too many email requests. Please wait a moment and try again.";
+        return messages.tooMany;
     }
     if (message.includes("signup") && message.includes("disabled")) {
-        return "Email sign-up is currently unavailable.";
+        return messages.signupUnavailable;
     }
 
-    return "We couldn't send the magic link. Please try again.";
+    return messages.sendFailed;
 }

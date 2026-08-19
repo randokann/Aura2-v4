@@ -59,7 +59,7 @@ export const CameraPage = ({ onSaved }) => {
             setPreview(`data:image/jpeg;base64,${b64}`);
             setResult(null);
             await runAnalysis(b64);
-        } catch { toast.error("Error reading image"); }
+        } catch { toast.error(t("errors.image_read")); }
     };
 
 const runAnalysis = async (b64) => {
@@ -77,7 +77,9 @@ const runAnalysis = async (b64) => {
         }
 
     } catch (e) {
-        toast.error(getAiRequestErrorMessage(e, "Food analysis failed. Please try again."));
+        toast.error(getAiRequestErrorMessage(e, t("errors.food_analysis"), {
+            offlineMessage: t("errors.offline"),
+        }));
     } finally {
         setAnalyzing(false);
     }
@@ -104,7 +106,9 @@ const handleClarification = async (option) => {
         toast.success(t("camera.detect_success", { name: res.dish_name }));
 
     } catch (e) {
-        toast.error(getAiRequestErrorMessage(e, "Clarification failed. Please try again."));
+        toast.error(getAiRequestErrorMessage(e, t("errors.clarification"), {
+            offlineMessage: t("errors.offline"),
+        }));
     } finally {
         setClarifying(false);
         setSelectedOption(null);
@@ -145,7 +149,7 @@ const handleClarification = async (option) => {
             toast.success(t("camera.saved"));
             reset();
             onSaved?.();
-        } catch { toast.error("Save error"); }
+        } catch { toast.error(t("errors.save_meal")); }
         finally { setSaving(false); }
     };
 

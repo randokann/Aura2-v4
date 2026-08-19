@@ -11,9 +11,6 @@ import { isGuestMode, getGuestMealPlans, addGuestMealPlan, deleteGuestMealPlan }
 import { UpgradePlanModal } from "../components/UpgradePlanModal";
 import {
     API_ERROR_KIND,
-    DAILY_MEAL_PLAN_LIMIT_MESSAGE,
-    OFFLINE_MESSAGE,
-    RETRY_LATER_MESSAGE,
     classifyApiError,
     getApiErrorMessage,
     isNoInternetError,
@@ -76,7 +73,7 @@ export const MealPlanPage = ({ profile }) => {
     const addIngredient = (name) => {
         const clean = name.trim();
         if (!clean) return;
-        if (ingredients.length >= 30) { toast.error("Max 30"); return; }
+        if (ingredients.length >= 30) { toast.error(t("errors.max_ingredients")); return; }
         if (ingredients.some((i) => i.toLowerCase() === clean.toLowerCase())) return;
         setIngredients([...ingredients, clean]);
         setIngredientInput("");
@@ -112,13 +109,13 @@ export const MealPlanPage = ({ profile }) => {
         } catch (e) {
             const error = classifyApiError(e);
             if (isNoInternetError(e)) {
-                toast.error(OFFLINE_MESSAGE);
+                toast.error(t("errors.offline"));
             } else if (error.code === "GUEST_PANTRY_LIMIT_REACHED") {
                 setUpgradeContext("pantry");
             } else if (error.kind === API_ERROR_KIND.RATE_LIMIT) {
-                toast.error(RETRY_LATER_MESSAGE);
+                toast.error(t("errors.retry_later"));
             } else {
-                toast.error(getApiErrorMessage(e, "Pantry scan failed. Please try again."));
+                toast.error(getApiErrorMessage(e, t("errors.pantry_scan")));
             }
         } finally {
             setScanningPantry(false);
@@ -145,15 +142,15 @@ export const MealPlanPage = ({ profile }) => {
         } catch (e) {
             const error = classifyApiError(e);
             if (isNoInternetError(e)) {
-                toast.error(OFFLINE_MESSAGE);
+                toast.error(t("errors.offline"));
             } else if (error.code === "GUEST_MEAL_PLAN_LIMIT_REACHED") {
                 setUpgradeContext("meal-plan");
             } else if (error.code === "MEAL_PLAN_DAILY_LIMIT_REACHED") {
-                toast.error(DAILY_MEAL_PLAN_LIMIT_MESSAGE);
+                toast.error(t("errors.daily_plan_limit"));
             } else if (error.kind === API_ERROR_KIND.RATE_LIMIT) {
-                toast.error(RETRY_LATER_MESSAGE);
+                toast.error(t("errors.retry_later"));
             } else {
-                toast.error(getApiErrorMessage(e, "Meal-plan generation failed. Please try again."));
+                toast.error(getApiErrorMessage(e, t("errors.meal_plan_generation")));
             }
         } finally { setGenerating(false); }
     };
@@ -164,7 +161,7 @@ export const MealPlanPage = ({ profile }) => {
             if (guestMode) {
                 const savedPlan = addGuestMealPlan({ ...plan, preset });
                 if (!savedPlan) {
-                    toast.error("Error");
+                    toast.error(t("errors.save_plan"));
                     return;
                 }
                 toast.success(t("common.save"));
@@ -174,7 +171,7 @@ export const MealPlanPage = ({ profile }) => {
                 toast.success(t("common.save"));
                 await loadSaved();
             }
-        } catch { toast.error("Error"); }
+        } catch { toast.error(t("errors.save_plan")); }
     };
 
     const onDelete = async (id) => {
@@ -182,7 +179,7 @@ export const MealPlanPage = ({ profile }) => {
             if (guestMode) {
                 const deleted = deleteGuestMealPlan(id);
                 if (!deleted) {
-                    toast.error("Error");
+                    toast.error(t("errors.delete_plan"));
                     return;
                 }
                 toast.success(t("plans.deleted"));
@@ -193,7 +190,7 @@ export const MealPlanPage = ({ profile }) => {
                 await loadSaved();
             }
         }
-        catch { toast.error("Error"); }
+        catch { toast.error(t("errors.delete_plan")); }
     };
 
     const commonList = COMMON_INGREDIENTS[lang] || COMMON_INGREDIENTS.en;

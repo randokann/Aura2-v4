@@ -20,6 +20,17 @@ jest.mock("../guestMigration/GuestMigrationProvider", () => ({
     useGuestMigration: jest.fn(),
 }));
 
+jest.mock("../i18n/LangContext", () => {
+    const { TRANSLATIONS, interpolate } = jest.requireActual("../i18n/translations");
+    const t = (key, vars) => {
+        const value = key.split(".").reduce((current, part) => current?.[part], TRANSLATIONS.en);
+        return vars ? interpolate(value, vars) : value;
+    };
+    return {
+        useLang: () => ({ lang: "en", setLang: jest.fn(), t }),
+    };
+});
+
 jest.mock("../lib/api", () => ({
     getProfile: jest.fn(),
     saveProfile: jest.fn(),

@@ -8,7 +8,11 @@ jest.mock("../i18n/LangContext", () => ({
     useLang: () => ({
         lang: "en",
         setLang: jest.fn(),
-        t: (key) => key,
+        t: (key, vars) => {
+            const { TRANSLATIONS, interpolate } = jest.requireActual("../i18n/translations");
+            const value = key.split(".").reduce((current, part) => current?.[part], TRANSLATIONS.en);
+            return vars ? interpolate(value, vars) : value;
+        },
     }),
 }));
 

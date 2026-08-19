@@ -123,6 +123,6 @@ export function isNoInternetError(error, options) {
 
 export function getAiRequestErrorMessage(error, fallback, options) {
     return isNoInternetError(error, options)
-        ? OFFLINE_MESSAGE
+        ? options?.offlineMessage || OFFLINE_MESSAGE
         : getApiErrorMessage(error, fallback);
 }

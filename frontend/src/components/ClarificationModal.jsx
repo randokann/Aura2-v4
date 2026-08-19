@@ -1,7 +1,9 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
+import { useLang } from "../i18n/LangContext";
 
 const ClarificationModal = ({ open, clarification, onSelect, loading, selectedOption }) => {
+    const { t } = useLang();
     if (!open || !clarification) return null;
 
     return (
@@ -22,7 +24,7 @@ const ClarificationModal = ({ open, clarification, onSelect, loading, selectedOp
                     </div>
 
                     <h2 className="font-display text-xl text-[color:var(--text-primary)]">
-                        One more detail
+                        {t("camera.more_detail")}
                     </h2>
 
                     <p className="mt-3 text-sm text-[color:var(--text-secondary)] leading-relaxed">
@@ -81,12 +83,12 @@ const ClarificationModal = ({ open, clarification, onSelect, loading, selectedOp
                     className="animate-pulse"
                 />
                 <span className="font-medium">
-                    Sto migliorando l'accuratezza della stima...
+                    {t("camera.refining")}
                 </span>
             </div>
 
             <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
-                Questo richiede solo pochi secondi.
+                {t("camera.few_seconds")}
             </p>
         </div>
     )}

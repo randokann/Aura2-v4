@@ -24,9 +24,9 @@ LANG_MARKERS = {
     "es": re.compile(r"[ñáéíóúü¿¡]|(?:\b(?:de|la|el|los|las|con|del|para|es|una|uno|arroz|pollo|verduras|comida|desayuno|almuerzo|cena|proteínas|carbohidratos|grasas|entrenamiento|recuperación|fuerza|piernas|pecho|espalda|hombros)\b)", re.IGNORECASE),
     "fr": re.compile(r"[àâçéèêëîïôûùüÿœæ]|(?:\b(?:le|la|les|des|avec|une|pour|poulet|riz|légumes|repas|petit-déjeuner|déjeuner|dîner|protéines|glucides|graisses|entraînement|récupération|force|jambes|poitrine|dos|épaules)\b)", re.IGNORECASE),
     "de": re.compile(r"[äöüß]|(?:\b(?:der|die|das|und|mit|für|eine|einen|Hähnchen|Reis|Gemüse|Mahlzeit|Frühstück|Mittagessen|Abendessen|Proteine|Kohlenhydrate|Fette|Training|Erholung|Kraft|Beine|Brust|Rücken|Schultern|Übung|Sätze|Wiederholungen)\b)", re.IGNORECASE),
+    "pt-BR": re.compile(r"[ãõáéíóúç]|(?:\b(?:você|com|para|frango|arroz|legumes|refeição|café|almoço|jantar|proteínas|carboidratos|gorduras|treino|recuperação|força|pernas|peito|costas|ombros)\b)", re.IGNORECASE),
+    "ko": re.compile(r"[\uac00-\ud7af]"),
     "zh": re.compile(r"[\u4e00-\u9fff]"),
-    "el": re.compile(r"[\u0370-\u03ff\u1f00-\u1fff]"),
-    "sq": re.compile(r"\b(?:me|dhe|për|një|nga|është|mish|pulë|oriz|perime|vakt|mëngjes|drekë|darkë|proteina|karbohidrate|yndyra|stërvitje|rikuperim|forcë|këmbë|kraharor|shpinë|shpatull)\b", re.IGNORECASE),
 }
 
 
@@ -37,10 +37,10 @@ def is_language(text: str, lang: str) -> int:
 
 
 # =========================================================
-# analyze-food multi-language regression (es, fr, de, zh)
+# analyze-food multi-language regression (es, fr, de, pt-BR, ko, zh)
 # =========================================================
 class TestAnalyzeFoodMultiLang:
-    @pytest.mark.parametrize("lang", ["es", "fr", "de", "zh"])
+    @pytest.mark.parametrize("lang", ["es", "fr", "de", "pt-BR", "ko", "zh"])
     def test_analyze_food_lang(self, base_url, api_client, food_b64, lang):
         r = api_client.post(
             f"{base_url}/api/analyze-food",
@@ -97,15 +97,15 @@ RECOVERY_LABELS = {
     "es": {"Recuperación completa", "Recuperación parcial", "Recuperación insuficiente", "Riesgo de sobreentrenamiento"},
     "fr": {"Récupération complète", "Récupération partielle", "Récupération insuffisante", "Risque de surentraînement"},
     "de": {"Vollständige Erholung", "Teilweise Erholung", "Unzureichende Erholung", "Übertrainingsrisiko"},
-    "sq": {"Rikuperim i plotë", "Rikuperim i pjesshëm", "Rikuperim i pamjaftueshëm", "Rrezik mbistërvitjeje"},
-    "el": {"Πλήρης ανάκαμψη", "Μερική ανάκαμψη", "Ανεπαρκής ανάκαμψη", "Κίνδυνος υπερπροπόνησης"},
+    "pt-BR": {"Recuperação completa", "Recuperação parcial", "Recuperação insuficiente", "Risco de excesso de treino"},
+    "ko": {"완전 회복", "부분 회복", "회복 부족", "과훈련 위험"},
     "zh": {"完全恢复", "部分恢复", "恢复不足", "过度训练风险"},
     "en": {"Full recovery", "Partial recovery", "Insufficient recovery", "Overtraining risk"},
 }
 
 
 class TestRecoveryMultiLang:
-    @pytest.mark.parametrize("lang", ["es", "fr", "de", "sq", "el", "zh"])
+    @pytest.mark.parametrize("lang", ["es", "fr", "de", "pt-BR", "ko", "zh"])
     def test_recovery_status_label(self, base_url, api_client, device_id, lang):
         r = api_client.post(
             f"{base_url}/api/coach/recovery",

@@ -44,3 +44,10 @@ export function clearAuthRedirectError(locationObject, historyObject) {
     );
     return true;
 }
+
+export function localizeAuthError(error, t) {
+    const message = String(error || "");
+    if (/invalid|expired|otp/i.test(message)) return t("auth.invalid_link");
+    if (/restore/i.test(message)) return t("auth_errors.restore");
+    return t("auth_errors.signin");
+}

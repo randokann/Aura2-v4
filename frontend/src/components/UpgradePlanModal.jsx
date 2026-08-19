@@ -13,23 +13,10 @@ import { EmailAuthDialog } from "./EmailAuthDialog";
 import { supabase } from "../lib/supabase";
 import {
     API_ERROR_KIND,
-    OFFLINE_MESSAGE,
     classifyApiError,
     getApiErrorMessage,
 } from "../lib/apiErrors";
-
-const FREE_FEATURES = [
-    "3 lifetime AI meal-plan generations",
-    "1 pantry or fridge scan",
-    "Data stored locally on this device",
-    "No cross-device sync",
-];
-
-const PRO_NOTES = [
-    "Flaro Pro is reserved for future updates",
-    "Features and availability have not been announced",
-    "No paid plan is active",
-];
+import { useLang } from "../i18n/LangContext";
 
 function FeatureList({ items }) {
     return (
@@ -45,6 +32,7 @@ function FeatureList({ items }) {
 }
 
 export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) {
+    const { t } = useLang();
     const [signingIn, setSigningIn] = useState(false);
     const [emailOpen, setEmailOpen] = useState(false);
     const pantryContext = context === "pantry";
@@ -59,8 +47,8 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
             const classified = classifyApiError(error);
             toast.error(
                 classified.kind === API_ERROR_KIND.OFFLINE
-                    ? OFFLINE_MESSAGE
-                    : getApiErrorMessage(error, "Google sign-in couldn't start. Please try again.")
+                    ? t("errors.offline")
+                    : getApiErrorMessage(error, t("profile.google_error"))
             );
             setSigningIn(false);
         }
@@ -79,13 +67,13 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                     </div>
                     <DialogTitle className="font-display text-2xl leading-tight">
                         {pantryContext
-                            ? "You've used your free pantry scan"
-                            : "You've used your 3 free AI meal plans"}
+                            ? t("upgrade.pantry_limit_title")
+                            : t("upgrade.meal_limit_title")}
                     </DialogTitle>
                     <DialogDescription className="pt-1 text-sm leading-relaxed text-[color:var(--text-secondary)]">
                         {pantryContext
-                            ? "Your guest pantry scan has been used. Create or sign in to a Flaro account to move to account-based access and sync your data."
-                            : "Your free guest AI generations have been used. Create or sign in to a Flaro account to move to account-based access and sync your data."}
+                            ? t("upgrade.pantry_limit_copy")
+                            : t("upgrade.meal_limit_copy")}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -97,13 +85,18 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                         <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2 text-sm font-semibold">
                                 <LockKeyhole size={16} className="text-[color:var(--action-primary)]" />
-                                Free plan
+                                {t("upgrade.free_plan")}
                             </div>
                             <span className="rounded-full bg-[color:var(--action-primary)]/15 px-2 py-1 text-[9px] font-semibold uppercase tracking-wider text-[color:var(--action-primary)]">
-                                Current
+                                {t("upgrade.current_plan")}
                             </span>
                         </div>
-                        <FeatureList items={FREE_FEATURES} />
+                        <FeatureList items={[
+                            t("upgrade.free_meal_plans"),
+                            t("upgrade.free_pantry"),
+                            t("upgrade.local_data"),
+                            t("upgrade.no_sync"),
+                        ]} />
                     </section>
 
                     <section
@@ -113,19 +106,23 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                         <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2 text-sm font-semibold">
                                 <Cloud size={16} className="text-[color:var(--text-secondary)]" />
-                                Pro plan
+                                {t("upgrade.pro_plan")}
                             </div>
                             <span className="rounded-full border border-white/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wider text-[color:var(--text-secondary)]">
-                                Reserved
+                                {t("upgrade.future")}
                             </span>
                         </div>
-                        <FeatureList items={PRO_NOTES} />
+                        <FeatureList items={[
+                            t("upgrade.pro_future"),
+                            t("upgrade.pro_unannounced"),
+                            t("upgrade.no_paid"),
+                        ]} />
                     </section>
                 </div>
 
                 <div className="space-y-2 pt-2 text-center">
                     <p className="text-xs text-[color:var(--text-secondary)]">
-                        Continue with Google or Email to use your Flaro account. No paid plan is activated.
+                        {t("upgrade.no_paid")}
                     </p>
                     <button
                         data-testid="upgrade-google-cta"
@@ -134,7 +131,7 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                         onClick={startGoogleSignIn}
                         className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 text-sm font-semibold text-[color:var(--bg-default)] disabled:opacity-60"
                     >
-                        {signingIn ? "Opening Google sign-in…" : "Upgrade — continue with Google"}
+                        {signingIn ? t("profile.opening_google") : t("upgrade.google")}
                     </button>
                     <button
                         data-testid="upgrade-email-cta"
@@ -146,14 +143,14 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                         }}
                         className="btn-tactile w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3 text-sm text-[color:var(--text-primary)] disabled:opacity-60"
                     >
-                        Continue with Email
+                        {t("auth.continue_email")}
                     </button>
                     <DialogClose asChild>
                         <button
                             type="button"
                             className="btn-tactile w-full rounded-full px-5 py-2.5 text-sm text-[color:var(--text-secondary)]"
                         >
-                            Maybe later
+                            {t("common.not_now")}
                         </button>
                     </DialogClose>
                 </div>
@@ -162,7 +159,7 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
         <EmailAuthDialog
             open={emailOpen}
             onOpenChange={setEmailOpen}
-            title="Continue with Email"
+            title={t("auth.continue_email")}
         />
         </>
     );

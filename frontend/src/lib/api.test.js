@@ -74,6 +74,31 @@ describe("API guest-import request handling", () => {
         expect(config.data.lang).toBe("it");
     });
 
+    test.each([
+        ["pt", "pt-BR"],
+        ["pt_BR", "pt-BR"],
+        ["ko-KR", "ko"],
+    ])("normalizes %s through X-Lang and ordinary request bodies", async (stored, expected) => {
+        localStorage.setItem("nutrisnap_lang", stored);
+        const config = await requestInterceptor({ url: "/meals", data: {}, headers: {} });
+
+        expect(config.headers["X-Lang"]).toBe(expected);
+        expect(config.data.lang).toBe(expected);
+    });
+
+    test("legacy locale never reaches guest-import or its strict body", async () => {
+        localStorage.setItem("nutrisnap_lang", "el");
+        const config = await requestInterceptor({
+            url: "/guest-import",
+            data: { version: 1 },
+            headers: {},
+            expectedUserId: "user-1",
+        });
+
+        expect(config.headers["X-Lang"]).toBe("en");
+        expect(config.data).toEqual({ version: 1 });
+    });
+
     test("authenticated-user mismatch rejects before guest import can be sent", async () => {
         await expect(requestInterceptor({
             url: "/guest-import",

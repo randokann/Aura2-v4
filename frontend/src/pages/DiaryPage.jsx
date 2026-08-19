@@ -99,11 +99,11 @@ console.timeEnd("Diary fetch");
 console.log("Total load:", performance.now() - start);
         } catch (e) {
             console.error("Diary load failed:", e);
-            toast.error("Errore");
+            toast.error(t("common.error"));
         } finally {
             setLoading(false);
         }
-    }, [profile, user]);
+    }, [profile, t, user]);
 
     useEffect(() => { load(); }, [load, refreshKey]);
 
@@ -160,7 +160,7 @@ console.log("Total load:", performance.now() - start);
 
     const remaining = Math.max(0, goals.calories - totals.calories);
 
-    const dateLabel = new Date().toLocaleDateString(lang === "it" ? "it-IT" : "en-US", {
+    const dateLabel = new Date().toLocaleDateString(lang, {
         weekday: "long", day: "numeric", month: "long",
     });
 

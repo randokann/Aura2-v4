@@ -429,7 +429,7 @@ Rules:
 - Never invent unrealistic options.
 Important:
 - Provide complete nutrition_per_100g with calories, protein, carbs, fat, fiber.
-- Aura2 backend will calculate final totals.
+- Flaro backend will calculate final totals.
 - Do not calculate meal totals.
 - Do not invent hidden ingredients.
 - Only estimate foods, grams, and nutrition values per 100g.
@@ -571,7 +571,7 @@ Important:
             secondary_profile = ", ".join(item for item in available if item)
 
         system = (
-            f"You compose practical meal plans. Aura2 has already calculated all supplied numeric "
+            f"You compose practical meal plans. Flaro has already calculated all supplied numeric "
             f"nutrition targets; never recompute or override BMI, BMR/TDEE, calories, macros, fiber, "
             f"or weight direction. Select foods, portions, recipes, and variety around those constraints. "
             f"Return only valid JSON; all human-readable strings must be in {lang_name}. "
@@ -579,7 +579,7 @@ Important:
         )
         prompt = f"""Compose a {days}-day meal plan with exactly four meals per day.
 Preset: {preset} — {directive}
-Authoritative Aura2 targets:
+Authoritative Flaro targets:
 {chr(10).join(target_lines)}
 Allergies/restrictions: {allergies or "none"}
 Available ingredients: {", ".join(ingredients[:40]) if ingredients else "none supplied"}
@@ -673,7 +673,7 @@ All text in {lang_name}. JSON ONLY."""
             profile_info = ", ".join(value for value in values if value) or "none"
 
         system = (
-            f"You compose safe, progressive training programs from fixed Aura2 constraints. "
+            f"You compose safe, progressive training programs from fixed Flaro constraints. "
             f"Do not change the goal, training-day count, experience level, or available equipment, "
             f"and do not make medical or rehabilitation conclusions. Select exercises, sets, reps, "
             f"rest, volume distribution, and progression guidance. Return only valid JSON; all "

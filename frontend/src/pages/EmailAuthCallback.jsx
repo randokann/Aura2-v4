@@ -5,11 +5,13 @@ import { useAuth } from "../auth/AuthProvider";
 import { useGuestMigration } from "../guestMigration/GuestMigrationProvider";
 import { getProfile, saveProfile } from "../lib/api";
 import { API_ERROR_KIND, classifyApiError } from "../lib/apiErrors";
+import { useLang } from "../i18n/LangContext";
 import {
     clearPendingOnboarding,
     readPendingOnboarding,
     synchronizeAuthenticatedOnboarding,
 } from "../lib/pendingOnboarding";
+import { localizeAuthError } from "../lib/authRedirect";
 
 const DEFAULT_AUTO_CONTINUE_DELAY_MS = 900;
 
@@ -25,11 +27,11 @@ function closeCallbackTab() {
     window.close();
 }
 
-function profileFailureMessage(error) {
+function profileFailureMessage(error, t) {
     if (classifyApiError(error).kind === API_ERROR_KIND.OFFLINE) {
-        return "Your email is confirmed, but Flaro couldn't finish your profile while you're offline. Reconnect and try again.";
+        return t("auth.profile_offline");
     }
-    return "Your email is confirmed, but Flaro couldn't finish setting up your profile. Your onboarding details are safe; try again.";
+    return t("auth.profile_failed");
 }
 
 function CallbackFrame({ icon, title, message, children }) {
@@ -62,6 +64,7 @@ export function EmailAuthCallback({
     onClose = closeCallbackTab,
     autoContinueDelay = DEFAULT_AUTO_CONTINUE_DELAY_MS,
 }) {
+    const { t } = useLang();
     const {
         user,
         loading,
@@ -88,7 +91,9 @@ export function EmailAuthCallback({
             const invalidOrExpired = /invalid|expired/i.test(authError);
             setView({
                 status: invalidOrExpired ? "link_error" : "auth_error",
-                message: authError,
+                message: invalidOrExpired
+                    ? t("auth.invalid_link")
+                    : localizeAuthError(authError, t),
             });
             return undefined;
         }
@@ -96,7 +101,7 @@ export function EmailAuthCallback({
         if (!user) {
             setView({
                 status: "link_error",
-                message: "This sign-in link is invalid or has expired. Request a new link and try again.",
+                message: t("auth.invalid_link"),
             });
             return undefined;
         }
@@ -132,13 +137,13 @@ export function EmailAuthCallback({
             });
         }).catch((error) => {
             if (!active) return;
-            setView({ status: "profile_error", message: profileFailureMessage(error) });
+            setView({ status: "profile_error", message: profileFailureMessage(error, t) });
         });
 
         return () => {
             active = false;
         };
-    }, [attempt, authError, guestMigration.settled, loading, user]);
+    }, [attempt, authError, guestMigration.settled, loading, t, user]);
 
     useEffect(() => {
         if (
@@ -164,10 +169,10 @@ export function EmailAuthCallback({
         return (
             <CallbackFrame
                 icon={<LoaderCircle className="animate-spin" size={24} />}
-                title="Confirming your email…"
+                title={t("auth.confirming")}
                 message={view.status === "completing"
-                    ? "You're signed in. Flaro is safely finishing your profile setup."
-                    : "Please keep this tab open while Flaro completes sign-in."}
+                    ? t("auth.completing")
+                    : t("auth.keep_open")}
             />
         );
     }
@@ -176,8 +181,8 @@ export function EmailAuthCallback({
         return (
             <CallbackFrame
                 icon={<CheckCircle2 size={24} />}
-                title="Email confirmed"
-                message="You're signed in to Flaro. You can continue here, or close this tab and return to the app."
+                title={t("auth.confirmed")}
+                message={t("auth.success")}
             >
                 <button
                     type="button"
@@ -185,7 +190,7 @@ export function EmailAuthCallback({
                     onClick={onContinue}
                     className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)]"
                 >
-                    Continue to Flaro
+                    {t("auth.continue_flaro")}
                 </button>
                 <button
                     type="button"
@@ -194,7 +199,7 @@ export function EmailAuthCallback({
                     className="btn-tactile flex w-full items-center justify-center gap-2 rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold"
                 >
                     <X size={17} />
-                    Close this tab
+                    {t("auth.close_tab")}
                 </button>
             </CallbackFrame>
         );
@@ -204,8 +209,8 @@ export function EmailAuthCallback({
         return (
             <CallbackFrame
                 icon={<CheckCircle2 size={24} />}
-                title="Email confirmed"
-                message="You're signed in. Complete your Flaro profile once to continue—there's no need to verify your email again."
+                title={t("auth.confirmed")}
+                message={t("auth.setup_required")}
             >
                 <button
                     type="button"
@@ -213,7 +218,7 @@ export function EmailAuthCallback({
                     onClick={onContinue}
                     className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)]"
                 >
-                    Complete profile setup
+                    {t("onboarding.complete_profile")}
                 </button>
                 <button
                     type="button"
@@ -221,7 +226,7 @@ export function EmailAuthCallback({
                     className="btn-tactile flex w-full items-center justify-center gap-2 rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold"
                 >
                     <X size={17} />
-                    Close this tab
+                    {t("auth.close_tab")}
                 </button>
             </CallbackFrame>
         );
@@ -231,7 +236,7 @@ export function EmailAuthCallback({
         return (
             <CallbackFrame
                 icon={<AlertTriangle size={24} />}
-                title="Email confirmed"
+                title={t("auth.confirmed")}
                 message={view.message}
             >
                 <button
@@ -240,7 +245,7 @@ export function EmailAuthCallback({
                     onClick={retryProfile}
                     className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)]"
                 >
-                    Retry profile setup
+                    {t("auth.retry_profile")}
                 </button>
                 <button
                     type="button"
@@ -248,7 +253,7 @@ export function EmailAuthCallback({
                     className="btn-tactile flex w-full items-center justify-center gap-2 rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold"
                 >
                     <X size={17} />
-                    Close this tab
+                    {t("auth.close_tab")}
                 </button>
             </CallbackFrame>
         );
@@ -258,7 +263,7 @@ export function EmailAuthCallback({
     return (
         <CallbackFrame
             icon={<AlertTriangle size={24} />}
-            title="We couldn't confirm this link"
+            title={t("auth.link_failed")}
             message={view.message}
         >
             {canRetryAuthentication ? (
@@ -268,7 +273,7 @@ export function EmailAuthCallback({
                     onClick={retryAuthentication}
                     className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)]"
                 >
-                    Try again
+                    {t("common.try_again")}
                 </button>
             ) : null}
             <button
@@ -277,7 +282,7 @@ export function EmailAuthCallback({
                 onClick={returnToSignIn}
                 className="btn-tactile w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold"
             >
-                Return to sign-in
+                {t("auth.return_signin")}
             </button>
         </CallbackFrame>
     );

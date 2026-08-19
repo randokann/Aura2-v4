@@ -65,7 +65,7 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                             }`}
                         >
                             <span className="text-2xl">{flag}</span>
-                            <span className="font-display text-sm">{name}</span>
+                            <span className="break-words text-center font-display text-sm leading-tight">{name}</span>
                         </button>
                     ))}
                 </div>
@@ -160,19 +160,19 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
         },
         // New final step: Choose how you want to continue
         {
-            title: authenticated ? "Finish your profile" : "Choose how you want to continue",
+            title: authenticated ? t("onboarding.finish_profile") : t("onboarding.choose_continue"),
             subtitle: authenticated
-                ? "Your email is confirmed. Complete this final step to enter Flaro."
-                : "Sync your workouts, meals and AI coach across all your devices.",
+                ? t("onboarding.confirmed_subtitle")
+                : t("onboarding.auth_subtitle"),
             colorSection: "profilo",
             body: authenticated ? (
                 <div className="rounded-2xl bg-[color:var(--bg-elevated)] p-5 text-sm leading-relaxed text-[color:var(--text-secondary)]">
-                    You're already signed in. Your profile will be saved to this account when you continue.
+                    {t("onboarding.signed_in_save")}
                 </div>
             ) : (
                 <div className="space-y-4">
                     <div className="text-sm text-[color:var(--text-secondary)]">
-                        Create or sign in to a Flaro account to keep your progress available across devices.
+                        {t("onboarding.account_intro")}
                     </div>
                     {/* Selectable option cards matching Activity/Goal style */}
                     <div className="space-y-2 mt-2">
@@ -185,9 +185,9 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                                     : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-primary)]"
                             }`}
                         >
-                            <div className="font-medium">Continue with Google</div>
+                            <div className="font-medium">{t("onboarding.continue_google")}</div>
                             <div className={`text-xs ${accountMethod === 'google' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
-                                Use your Google account to sync across devices.
+                                {t("onboarding.google_hint")}
                             </div>
                         </button>
 
@@ -200,9 +200,9 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                                     : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-primary)]"
                             }`}
                         >
-                            <div className="font-medium">Continue with Email</div>
+                            <div className="font-medium">{t("onboarding.continue_email")}</div>
                             <div className={`text-xs ${accountMethod === 'email' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
-                                Sign in with a secure email magic link.
+                                {t("onboarding.email_hint")}
                             </div>
                         </button>
 
@@ -215,10 +215,9 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                                     : "bg-[color:var(--bg-elevated)] border-white/5 text-[color:var(--text-primary)]"
                             }`}
                         >
-                            <div className="font-medium">Continue without an account</div>
+                            <div className="font-medium">{t("onboarding.continue_guest")}</div>
                             <div className={`text-xs ${accountMethod === 'guest' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
-                                Your data will be stored only on this device.
-                                You can create an account later to sync across devices.
+                                {t("onboarding.guest_hint")}
                             </div>
                         </button>
                     </div>
@@ -227,7 +226,7 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                         open={showEmailModal}
                         onOpenChange={setShowEmailModal}
                         beforeRequest={persistEmailOnboarding}
-                        title="Continue with Email"
+                        title={t("auth.continue_email")}
                     />
                 </div>
             ),

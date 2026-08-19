@@ -251,7 +251,7 @@ const ProgramSection = () => {
             });
             setProgram(p);
             toast.success(t("coach.program.ready"));
-        } catch (e) { toast.error(e?.response?.data?.detail || "Error"); }
+        } catch (e) { toast.error(e?.response?.data?.detail || t("errors.workout")); }
         finally { setLoading(false); }
     };
 
@@ -356,7 +356,7 @@ const RecoverySection = () => {
     const submit = async () => {
         setLoading(true);
         try { setResult(await estimateRecovery({ device_id: getDeviceId(), ...form })); }
-        catch (e) { toast.error(e?.response?.data?.detail || "Error"); }
+        catch (e) { toast.error(e?.response?.data?.detail || t("errors.workout")); }
         finally { setLoading(false); }
     };
 
@@ -430,14 +430,14 @@ const WorkoutLogSection = () => {
         try {
             if (guestMode) {
                 const workout = addGuestWorkout({ ...form, log_date: todayISO() });
-                if (!workout) { toast.error("Error"); return; }
+                if (!workout) { toast.error(t("errors.workout")); return; }
             } else {
                 await logWorkout({ device_id: getDeviceId(), ...form, log_date: todayISO() });
             }
             toast.success(t("coach.log.logged"));
             setForm({ exercise: "", sets: 3, reps: 10, weight_kg: 0, duration_min: 0, notes: "" });
             load();
-        } catch { toast.error("Error"); }
+        } catch { toast.error(t("errors.workout")); }
         finally { setSaving(false); }
     };
 

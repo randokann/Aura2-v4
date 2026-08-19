@@ -4,6 +4,18 @@ import { createRoot } from "react-dom/client";
 
 import { UpgradePlanModal } from "./UpgradePlanModal";
 
+jest.mock("../i18n/LangContext", () => ({
+    useLang: () => ({
+        lang: "en",
+        setLang: jest.fn(),
+        t: (key, vars) => {
+            const { TRANSLATIONS, interpolate } = jest.requireActual("../i18n/translations");
+            const value = key.split(".").reduce((current, part) => current?.[part], TRANSLATIONS.en);
+            return vars ? interpolate(value, vars) : value;
+        },
+    }),
+}));
+
 jest.mock("./ui/dialog", () => ({
     Dialog: ({ open, children }) => (open ? <div>{children}</div> : null),
     DialogClose: ({ children }) => children,

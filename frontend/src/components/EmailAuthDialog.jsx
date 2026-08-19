@@ -11,13 +11,15 @@ import {
     getEmailAuthErrorMessage,
     requestEmailMagicLink,
 } from "../lib/emailAuth";
+import { useLang } from "../i18n/LangContext";
 
 export function EmailAuthDialog({
     open,
     onOpenChange,
     beforeRequest,
-    title = "Continue with Email",
+    title,
 }) {
+    const { t } = useLang();
     const [email, setEmail] = useState("");
     const [sending, setSending] = useState(false);
     const [sentTo, setSentTo] = useState("");
@@ -38,7 +40,16 @@ export function EmailAuthDialog({
             });
             setSentTo(normalizedEmail);
         } catch (error) {
-            setErrorMessage(getEmailAuthErrorMessage(error, { online: onlineAtRequest }));
+            setErrorMessage(getEmailAuthErrorMessage(error, {
+                online: onlineAtRequest,
+                messages: {
+                    invalidEmail: t("auth.invalid_email"),
+                    offline: t("errors.offline"),
+                    tooMany: t("auth.too_many"),
+                    signupUnavailable: t("auth.signup_unavailable"),
+                    sendFailed: t("auth.send_failed"),
+                },
+            }));
         } finally {
             requestInFlight.current = false;
             setSending(false);
@@ -63,12 +74,12 @@ export function EmailAuthDialog({
                             : <Mail size={21} className="text-[color:var(--action-primary)]" />}
                     </div>
                     <DialogTitle className="font-display text-2xl leading-tight">
-                        {sentTo ? "Check your email" : title}
+                        {sentTo ? t("auth.check_email") : title || t("auth.continue_email")}
                     </DialogTitle>
                     <DialogDescription className="pt-1 text-sm leading-relaxed text-[color:var(--text-secondary)]">
                         {sentTo
-                            ? `We sent a secure Flaro sign-in link to ${sentTo}. Open it to continue.`
-                            : "Enter your email and we'll send you a secure magic link. No password needed."}
+                            ? t("auth.sent_link", { email: sentTo })
+                            : t("auth.enter_email")}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -87,14 +98,14 @@ export function EmailAuthDialog({
                             className="btn-tactile flex w-full items-center justify-center gap-2 rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 text-sm font-semibold text-[color:var(--bg-default)] disabled:opacity-60"
                         >
                             {sending && <Loader2 size={16} className="animate-spin" />}
-                            {sending ? "Sending…" : "Resend magic link"}
+                            {sending ? t("auth.sending") : t("auth.resend")}
                         </button>
                         <button
                             type="button"
                             onClick={changeEmail}
                             className="btn-tactile w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3 text-sm text-[color:var(--text-secondary)]"
                         >
-                            Use a different email
+                            {t("auth.different_email")}
                         </button>
                     </div>
                 ) : (
@@ -128,7 +139,7 @@ export function EmailAuthDialog({
                             className="btn-tactile flex w-full items-center justify-center gap-2 rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 text-sm font-semibold text-[color:var(--bg-default)] disabled:opacity-60"
                         >
                             {sending && <Loader2 size={16} className="animate-spin" />}
-                            {sending ? "Sending magic link…" : "Send magic link"}
+                            {sending ? t("auth.sending_link") : t("auth.send_link")}
                         </button>
                     </form>
                 )}

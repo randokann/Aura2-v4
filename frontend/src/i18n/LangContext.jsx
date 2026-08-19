@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { TRANSLATIONS, interpolate } from "./translations";
+import { normalizeSupportedLocale, resolveStoredLocale } from "./locale";
 
 const LangContext = createContext({
     lang: "en",
@@ -9,25 +10,25 @@ const LangContext = createContext({
 
 // Non-sensitive UI preference (locale code only). No auth data ever stored here.
 const LANG_KEY = "nutrisnap_lang";
-const SUPPORTED = ["en", "es", "it", "fr", "de", "sq", "el", "zh"];
 
 export const LangProvider = ({ children }) => {
     const [lang, setLangState] = useState(() => {
         const saved = localStorage.getItem(LANG_KEY);
-        return SUPPORTED.includes(saved) ? saved : "en";
+        return resolveStoredLocale(saved);
     });
 
-    const setLang = (l) => {
-        const next = SUPPORTED.includes(l) ? l : "en";
+    const setLang = useCallback((l) => {
+        const next = normalizeSupportedLocale(l) || "en";
         setLangState(next);
         localStorage.setItem(LANG_KEY, next);
-    };
+    }, []);
 
     useEffect(() => {
         document.documentElement.lang = lang;
+        localStorage.setItem(LANG_KEY, lang);
     }, [lang]);
 
-    const t = (path, vars) => {
+    const t = useCallback((path, vars) => {
         const parts = path.split(".");
         // Try selected lang, fall back to English if a key is missing
         for (const dict of [TRANSLATIONS[lang], TRANSLATIONS.en]) {
@@ -40,7 +41,7 @@ export const LangProvider = ({ children }) => {
             if (ok) return vars ? interpolate(cur, vars) : cur;
         }
         return path;
-    };
+    }, [lang]);
 
     return (
         <LangContext.Provider value={{ lang, setLang, t }}>

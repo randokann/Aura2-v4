@@ -122,7 +122,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
             if (error) throw error;
         } catch (error) {
             console.error("Google sign-in failed to start:", error);
-            toast.error("Google sign-in couldn't start. Please try again.");
+            toast.error(t("profile.google_error"));
             setGoogleSigningIn(false);
         }
     };
@@ -140,7 +140,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
 
                 const saved = saveGuestProfile(updatedGuestProfile);
                 if (!saved) {
-                    toast.error("Error");
+                    toast.error(t("profile.save_error"));
                     return;
                 }
                 localStorage.setItem("aura2_guest_mode", "true");
@@ -152,7 +152,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
             const u = await saveProfile(form);
             toast.success(t("profile.updated"));
             onUpdated?.(u);
-        } catch { toast.error("Error"); }
+        } catch { toast.error(t("profile.save_error")); }
         finally { setSaving(false); }
     };
 
@@ -164,7 +164,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
             const { error } = await supabase.auth.signOut();
             if (error) throw error;
         } catch {
-            toast.error("Couldn't sign out. Please try again.");
+            toast.error(t("profile.sign_out_error"));
         } finally {
             signOutInFlight.current = false;
             setSigningOut(false);
@@ -183,7 +183,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
             <div className="glass rounded-3xl p-4 mb-6">
                 <div className="flex items-center gap-2 mb-3">
                     <Languages size={16} className="text-[color:var(--action-primary)]" />
-                    <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">Language</div>
+                    <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">{t("profile.language")}</div>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                     {LANGUAGES.map(({ code, flag, name }) => (
@@ -191,14 +191,14 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             key={code}
                             data-testid={`lang-${code}`}
                             onClick={() => setLang(code)}
-                            className={`btn-tactile py-2.5 rounded-2xl flex flex-col items-center gap-0.5 ${
+                            className={`btn-tactile min-h-[4.75rem] px-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 ${
                                 lang === code
                                     ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)]"
                                     : "bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
                             }`}
                         >
                             <span className="text-lg leading-none">{flag}</span>
-                            <span className="text-[9px] tracking-overline uppercase font-medium">{name}</span>
+                            <span className="break-words text-center text-[9px] font-medium leading-tight">{name}</span>
                         </button>
                     ))}
                 </div>
@@ -228,13 +228,13 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                         </div>
                         <div>
                             <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">
-                                Account &amp; sync
+                                {t("profile.account_sync")}
                             </div>
                             <h2 className="font-display text-xl font-semibold mt-1">
-                                Save &amp; sync your progress
+                                {t("profile.save_sync_title")}
                             </h2>
                             <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mt-2">
-                                Create or sign in to a Flaro account to keep your profile, meals, workouts and plans across devices.
+                                {t("profile.guest_account_copy")}
                             </p>
                         </div>
                     </div>
@@ -248,7 +248,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)] flex items-center justify-center gap-2 disabled:opacity-60"
                         >
                             {googleSigningIn && <Loader2 size={17} className="animate-spin" />}
-                            {googleSigningIn ? "Opening Google sign-in…" : "Continue with Google"}
+                            {googleSigningIn ? t("profile.opening_google") : t("profile.continue_google")}
                         </button>
                         <button
                             type="button"
@@ -258,12 +258,12 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             className="btn-tactile w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold text-[color:var(--text-primary)] flex items-center justify-center gap-2 disabled:opacity-60"
                         >
                             <Mail size={17} />
-                            Continue with Email
+                            {t("profile.continue_email")}
                         </button>
                     </div>
 
                     <p className="text-xs leading-relaxed text-[color:var(--text-secondary)] mt-4">
-                        Your current guest data stays on this device until account sync completes.
+                        {t("profile.guest_data_note")}
                     </p>
                 </section>
             )}
@@ -276,13 +276,13 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                         </div>
                         <div className="min-w-0">
                             <div className="text-[10px] tracking-overline uppercase text-[color:var(--text-secondary)]">
-                                Account &amp; sync
+                                {t("profile.account_sync")}
                             </div>
-                            <h2 className="font-display text-xl font-semibold mt-1">Account connected</h2>
+                            <h2 className="font-display text-xl font-semibold mt-1">{t("profile.account_connected")}</h2>
                             <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mt-2">
                                 {guestMigration.hasImportableData
-                                    ? "Data from this device is available to import."
-                                    : "Your Flaro data is synced to your account."}
+                                    ? t("profile.device_data_available")
+                                    : t("profile.data_synced")}
                             </p>
                             {user.email && (
                                 <p data-testid="profile-account-email-address" className="text-sm font-medium mt-2 truncate">
@@ -291,7 +291,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             )}
                             {guestMigration.profileNeedsReconciliation ? (
                                 <p className="mt-3 text-xs leading-relaxed text-[color:var(--text-secondary)]">
-                                    Your account profile was kept unchanged. The guest profile is still stored on this device.
+                                    {t("profile.profile_reconciliation")}
                                 </p>
                             ) : null}
                         </div>
@@ -304,7 +304,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             onClick={guestMigration.requestDeviceImport}
                             className="btn-tactile mt-5 w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold text-[color:var(--text-primary)] disabled:opacity-60"
                         >
-                            {guestMigration.status === "importing" ? "Importing…" : "Import device data"}
+                            {guestMigration.status === "importing" ? t("profile.importing") : t("profile.import_device")}
                         </button>
                     ) : null}
                     <button
@@ -317,7 +317,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                         {signingOut
                             ? <Loader2 size={16} className="animate-spin" />
                             : <LogOut size={16} />}
-                        {signingOut ? "Signing out…" : "Sign out"}
+                        {signingOut ? t("profile.signing_out") : t("profile.sign_out")}
                     </button>
                 </section>
             )}
@@ -422,7 +422,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                 <EmailAuthDialog
                     open={emailAuthOpen}
                     onOpenChange={setEmailAuthOpen}
-                    title="Continue with Email"
+                    title={t("auth.continue_email")}
                 />
             )}
         </div>

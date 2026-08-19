@@ -7,6 +7,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "./ui/dialog";
+import { useLang } from "../i18n/LangContext";
 
 export function GuestImportModal({
     mode,
@@ -15,6 +16,7 @@ export function GuestImportModal({
     onRetry,
     onContinue,
 }) {
+    const { t } = useLang();
     const open = ["confirmation_required", "importing", "failed"].includes(mode);
     const importing = mode === "importing";
     const failed = mode === "failed";
@@ -37,26 +39,26 @@ export function GuestImportModal({
                     </div>
                     <DialogTitle className="font-display text-2xl leading-tight">
                         {importing
-                            ? "Importing device data…"
+                            ? t("migration.importing_title")
                             : failed
-                                ? "We couldn't sync the data from this device yet."
-                                : "Import data from this device?"}
+                                ? t("migration.failed_title")
+                                : t("migration.confirm_title")}
                     </DialogTitle>
                     <DialogDescription className="pt-1 text-sm leading-relaxed text-[color:var(--text-secondary)]">
                         {importing
-                            ? "Keep Flaro open while your saved data is added to your account."
+                            ? t("migration.importing_copy")
                             : failed
-                                ? "Your account is connected and your device data is still safe. Retry now or import it later from Profile."
-                                : "This Flaro account already has saved data. Its profile and saved data will stay unchanged. Add the meals, workouts and saved plans from this device?"}
+                                ? t("migration.failed_copy")
+                                : t("migration.confirm_copy")}
                     </DialogDescription>
                 </DialogHeader>
 
                 {mode === "confirmation_required" ? (
                     <div className="grid grid-cols-3 gap-2" data-testid="guest-import-counts">
                         {[
-                            ["Meals", counts.meals],
-                            ["Workouts", counts.workouts],
-                            ["Saved plans", counts.mealPlans],
+                            [t("migration.meals"), counts.meals],
+                            [t("migration.workouts"), counts.workouts],
+                            [t("migration.saved_plans"), counts.mealPlans],
                         ].map(([label, value]) => (
                             <div key={label} className="rounded-2xl bg-[color:var(--bg-elevated)] p-3 text-center">
                                 <div className="font-display text-xl font-semibold">{value}</div>
@@ -74,7 +76,7 @@ export function GuestImportModal({
                             onClick={failed ? onRetry : onImport}
                             className="btn-tactile w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)]"
                         >
-                            {failed ? "Retry" : "Import"}
+                            {failed ? t("common.retry") : t("migration.import")}
                         </button>
                         <button
                             type="button"
@@ -82,7 +84,7 @@ export function GuestImportModal({
                             onClick={onContinue}
                             className="btn-tactile w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold text-[color:var(--text-primary)]"
                         >
-                            {failed ? "Continue without syncing for now" : "Not now"}
+                            {failed ? t("migration.continue_without") : t("common.not_now")}
                         </button>
                     </div>
                 ) : null}

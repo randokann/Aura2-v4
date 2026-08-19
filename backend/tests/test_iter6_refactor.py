@@ -75,7 +75,7 @@ def test_recovery_status_labels_identical():
     assert RECOVERY_STATUS_LABELS["fr"][3] == "Risque de surentraînement"
     assert RECOVERY_STATUS_LABELS["zh"][0] == "完全恢复"
     # 8 languages
-    assert set(RECOVERY_STATUS_LABELS.keys()) == {"en", "it", "es", "fr", "de", "sq", "el", "zh"}
+    assert set(RECOVERY_STATUS_LABELS.keys()) == {"en", "it", "es", "fr", "de", "pt-BR", "ko", "zh"}
     for labels in RECOVERY_STATUS_LABELS.values():
         assert len(labels) == 4
 

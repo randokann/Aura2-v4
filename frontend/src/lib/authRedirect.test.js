@@ -1,4 +1,8 @@
-import { clearAuthRedirectError, getAuthRedirectError } from "./authRedirect";
+import {
+    clearAuthRedirectError,
+    getAuthRedirectError,
+    localizeAuthError,
+} from "./authRedirect";
 
 describe("auth redirect errors", () => {
     test("maps an expired magic link to recoverable copy and cleans the URL", () => {
@@ -22,5 +26,15 @@ describe("auth redirect errors", () => {
 
     test("ignores URLs without an auth failure", () => {
         expect(getAuthRedirectError({ pathname: "/", search: "", hash: "" })).toBeNull();
+    });
+
+    test("maps internal auth copy to locale keys before display", () => {
+        const t = jest.fn((key) => `translated:${key}`);
+
+        expect(localizeAuthError("otp_expired", t)).toBe("translated:auth.invalid_link");
+        expect(localizeAuthError("Authentication couldn't be restored", t))
+            .toBe("translated:auth_errors.restore");
+        expect(localizeAuthError("provider failure", t))
+            .toBe("translated:auth_errors.signin");
     });
 });

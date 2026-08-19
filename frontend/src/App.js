@@ -22,6 +22,7 @@ import {
     savePendingOnboarding,
     synchronizeAuthenticatedOnboarding,
 } from "@/lib/pendingOnboarding";
+import { localizeAuthError } from "./lib/authRedirect";
 
 // Compute derived nutrition/BMI fields from raw profile inputs.
 // Mirrors the logic in ProfilePage.computeProfileGoals so guests always
@@ -180,8 +181,8 @@ function Shell() {
                 if (active) {
                     setProfileSyncError(
                         operation.hasPending
-                            ? "We couldn't finish setting up your profile. Your onboarding data is safe; try again."
-                            : "We couldn't load your profile. Please try again."
+                            ? "errors.profile_pending_failed"
+                            : "errors.profile_load_failed"
                     );
                 }
             } finally {
@@ -207,9 +208,9 @@ function Shell() {
 
     useEffect(() => {
         if (!authError) return;
-        toast.error(authError);
+        toast.error(localizeAuthError(authError, t));
         clearAuthError();
-    }, [authError, clearAuthError]);
+    }, [authError, clearAuthError, t]);
 
     // When finishing onboarding: if already authenticated, save immediately.
     // Otherwise persist the form and start OAuth sign-in; the pending form will be
@@ -288,16 +289,16 @@ function Shell() {
         return (
             <div className="min-h-screen flex items-center justify-center px-6">
                 <div className="glass max-w-md rounded-3xl p-6 text-center">
-                    <h1 className="font-display text-2xl font-semibold">Profile setup paused</h1>
+                    <h1 className="font-display text-2xl font-semibold">{t("errors.profile_setup_paused")}</h1>
                     <p className="mt-3 text-sm text-[color:var(--text-secondary)]">
-                        {profileSyncError}
+                        {t(profileSyncError)}
                     </p>
                     <button
                         type="button"
                         onClick={() => setProfileSyncAttempt((attempt) => attempt + 1)}
                         className="btn-tactile mt-5 w-full rounded-full bg-[color:var(--action-primary)] px-5 py-3.5 font-semibold text-[color:var(--bg-default)]"
                     >
-                        Try again
+                        {t("common.try_again")}
                     </button>
                 </div>
             </div>

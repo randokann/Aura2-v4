@@ -35,8 +35,10 @@ describe("Flaro visible branding and compatibility metadata", () => {
     });
 
     test("the camera brand is Flaro in every supported language", () => {
-        expect(Object.values(TRANSLATIONS).map((locale) => locale.camera.eyebrow))
-            .toEqual(Object.keys(TRANSLATIONS).map(() => "Flaro AI"));
+        Object.values(TRANSLATIONS).forEach((locale) => {
+            expect(locale.camera.eyebrow).toMatch(/^Flaro\s/);
+            expect(locale.camera.eyebrow).not.toMatch(/Aura2|NutriSnap|Emergent/);
+        });
     });
 
     test("legacy storage identifiers remain unchanged for existing devices", () => {
