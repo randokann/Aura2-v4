@@ -1,5 +1,8 @@
 import os
+import hashlib
+import json
 import logging
+import re
 import uuid
 from pathlib import Path
 
@@ -21,9 +24,17 @@ supabase: Client = create_client(
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Header
 from auth import get_current_user
 from starlette.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Literal
-from datetime import datetime, timezone, timedelta
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
+from typing import Annotated, List, Optional, Literal, Union
+from datetime import date, datetime, timezone, timedelta
 from ai import get_ai_service, AIProviderError, AIUpstreamConnectionError
 from ai.constants import recovery_status_for
 
@@ -739,6 +750,291 @@ class SavedMealPlan(BaseModel):
     preset: str
     days: List[PlannedDay]
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ============ GUEST IMPORT ============
+
+def _calendar_date_only(value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError("must be an ISO calendar date in YYYY-MM-DD format")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("must be a real ISO calendar date") from exc
+
+
+GuestImportDate = Annotated[date, BeforeValidator(_calendar_date_only)]
+GuestImportIngredient = Annotated[str, Field(min_length=1, max_length=120)]
+GuestImportClientId = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    ),
+]
+
+
+class StrictGuestImportModel(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        allow_inf_nan=False,
+    )
+
+
+class GuestImportProfileInput(StrictGuestImportModel):
+    name: str = Field(max_length=120)
+    age: int = Field(strict=True, ge=12, le=110)
+    sex: Literal["maschio", "femmina"]
+    height_cm: float = Field(strict=True, ge=100, le=250, allow_inf_nan=False)
+    current_weight_kg: float = Field(strict=True, ge=20, le=500, allow_inf_nan=False)
+    target_weight_kg: float = Field(strict=True, ge=20, le=500, allow_inf_nan=False)
+    activity_level: Literal["sedentario", "leggero", "moderato", "intenso", "molto_intenso"]
+    goal: Literal["dimagrire", "mantenere", "aumentare"]
+
+
+class GuestImportFoodItem(FoodItem):
+    model_config = StrictGuestImportModel.model_config
+
+    name: str = Field(min_length=1, max_length=160)
+    quantity: str = Field(min_length=1, max_length=80)
+    calories: float = Field(strict=True, ge=0, le=20_000, allow_inf_nan=False)
+    protein: float = Field(default=0, strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    carbs: float = Field(default=0, strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    fat: float = Field(default=0, strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    fiber: float = Field(default=0, strict=True, ge=0, le=1_000, allow_inf_nan=False)
+
+
+class GuestImportMealInput(StrictGuestImportModel):
+    client_import_id: GuestImportClientId
+    dish_name: str = Field(min_length=1, max_length=200)
+    foods: List[GuestImportFoodItem] = Field(min_length=1, max_length=50)
+    total_calories: float = Field(strict=True, ge=0, le=20_000, allow_inf_nan=False)
+    total_protein: float = Field(strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    total_carbs: float = Field(strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    total_fat: float = Field(strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    total_fiber: float = Field(strict=True, ge=0, le=1_000, allow_inf_nan=False)
+    meal_date: GuestImportDate
+    meal_type: Literal["colazione", "pranzo", "cena", "spuntino"]
+    notes: str = Field(default="", max_length=2_000)
+
+
+class GuestImportWorkoutInput(StrictGuestImportModel):
+    client_import_id: GuestImportClientId
+    exercise: str = Field(min_length=1, max_length=200)
+    sets: int = Field(strict=True, ge=0, le=100)
+    reps: int = Field(strict=True, ge=0, le=10_000)
+    weight_kg: float = Field(default=0, strict=True, ge=0, le=2_000, allow_inf_nan=False)
+    duration_min: int = Field(default=0, strict=True, ge=0, le=1_440)
+    notes: str = Field(default="", max_length=2_000)
+    log_date: GuestImportDate
+
+    @model_validator(mode="after")
+    def validate_work_performed(self):
+        if self.duration_min == 0 and (self.sets == 0 or self.reps == 0):
+            raise ValueError("workout must include repetitions or a positive duration")
+        return self
+
+
+class GuestImportPlannedMeal(PlannedMeal):
+    model_config = StrictGuestImportModel.model_config
+
+    meal_type: Literal["colazione", "pranzo", "cena", "spuntino"]
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1_000)
+    calories: float = Field(strict=True, ge=0, le=20_000, allow_inf_nan=False)
+    protein: float = Field(strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    carbs: float = Field(strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    fat: float = Field(strict=True, ge=0, le=5_000, allow_inf_nan=False)
+    ingredients: List[GuestImportIngredient] = Field(default_factory=list, max_length=50)
+
+
+class GuestImportPlannedDay(PlannedDay):
+    model_config = StrictGuestImportModel.model_config
+
+    day: int = Field(strict=True, ge=1, le=7)
+    label: str = Field(min_length=1, max_length=120)
+    meals: List[GuestImportPlannedMeal] = Field(min_length=1, max_length=6)
+    total_calories: float = Field(strict=True, ge=0, le=50_000, allow_inf_nan=False)
+    total_protein: float = Field(strict=True, ge=0, le=10_000, allow_inf_nan=False)
+    total_carbs: float = Field(strict=True, ge=0, le=10_000, allow_inf_nan=False)
+    total_fat: float = Field(strict=True, ge=0, le=10_000, allow_inf_nan=False)
+
+
+class GuestImportMealPlanInput(StrictGuestImportModel):
+    client_import_id: GuestImportClientId
+    title: str = Field(min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=4_000)
+    preset: Literal[
+        "ipercalorico",
+        "iperproteico",
+        "ipocalorico",
+        "bilanciato",
+        "keto",
+        "vegetariano",
+        "vegano",
+        "mediterraneo",
+        "custom",
+        "ingredients",
+    ]
+    days: List[GuestImportPlannedDay] = Field(min_length=1, max_length=7)
+
+    @model_validator(mode="after")
+    def validate_unique_days(self):
+        day_numbers = [day.day for day in self.days]
+        if len(day_numbers) != len(set(day_numbers)):
+            raise ValueError("meal plan day numbers must be unique")
+        return self
+
+
+class GuestImportRequest(StrictGuestImportModel):
+    version: int = Field(strict=True, ge=1, le=1)
+    source_guest_id: uuid.UUID
+    confirm_existing_account: bool = Field(default=False, strict=True)
+    profile: Optional[GuestImportProfileInput] = None
+    meals: List[GuestImportMealInput] = Field(default_factory=list, max_length=500)
+    workouts: List[GuestImportWorkoutInput] = Field(default_factory=list, max_length=500)
+    meal_plans: List[GuestImportMealPlanInput] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_unique_import_ids(self):
+        for entity_name, items in (
+            ("meal", self.meals),
+            ("workout", self.workouts),
+            ("meal_plan", self.meal_plans),
+        ):
+            item_ids = [item.client_import_id for item in items]
+            if len(item_ids) != len(set(item_ids)):
+                raise ValueError(f"duplicate {entity_name} client_import_id")
+        if (
+            self.profile is None
+            and not self.meals
+            and not self.workouts
+            and not self.meal_plans
+        ):
+            raise ValueError("guest import must contain at least one item")
+        return self
+
+
+class GuestImportProfileResult(StrictGuestImportModel):
+    outcome: Literal["imported", "already_imported", "skipped_existing"]
+
+
+class GuestImportEntityResult(StrictGuestImportModel):
+    client_import_id: GuestImportClientId
+    outcome: Literal["imported", "already_imported"]
+    target_id: uuid.UUID
+
+
+class GuestImportSuccessResponse(StrictGuestImportModel):
+    status: Literal["imported"]
+    profile: Optional[GuestImportProfileResult] = None
+    meals: List[GuestImportEntityResult] = Field(default_factory=list)
+    workouts: List[GuestImportEntityResult] = Field(default_factory=list)
+    meal_plans: List[GuestImportEntityResult] = Field(default_factory=list)
+
+
+class GuestImportConfirmationResponse(StrictGuestImportModel):
+    status: Literal["confirmation_required"]
+    existing_profile: bool = Field(strict=True)
+    guest_meals: int = Field(strict=True, ge=0)
+    guest_workouts: int = Field(strict=True, ge=0)
+    guest_meal_plans: int = Field(strict=True, ge=0)
+
+
+GuestImportResponse = Union[GuestImportSuccessResponse, GuestImportConfirmationResponse]
+guest_import_response_adapter = TypeAdapter(GuestImportResponse)
+
+
+def _canonical_guest_import_hash(content: dict) -> str:
+    canonical = json.dumps(
+        content,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _guest_import_rpc_item(item: StrictGuestImportModel) -> dict:
+    content = item.model_dump(mode="json", exclude={"client_import_id"})
+    return {
+        "client_import_id": item.client_import_id,
+        "payload_hash": _canonical_guest_import_hash(content),
+        "data": content,
+    }
+
+
+def _guest_import_error_is_collision(error: Exception) -> bool:
+    return (
+        getattr(error, "code", None) == "23505"
+        and getattr(error, "message", None) == "GUEST_IMPORT_COLLISION"
+    )
+
+
+@api_router.post("/guest-import", response_model=GuestImportResponse)
+async def import_guest_data(
+    request: GuestImportRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    profile_item = None
+    if request.profile is not None:
+        raw_profile = request.profile.model_dump(mode="json")
+        profile_input = ProfileInput(**raw_profile)
+        profile_data = {
+            **raw_profile,
+            **compute_calorie_goal(profile_input),
+        }
+        profile_data["height_cm"] = int(float(profile_data["height_cm"]))
+        profile_item = {
+            "client_import_id": "profile",
+            "payload_hash": _canonical_guest_import_hash(raw_profile),
+            "data": profile_data,
+        }
+
+    rpc_params = {
+        "p_user_id": user_id,
+        "p_source_guest_id": str(request.source_guest_id),
+        "p_confirm_existing_account": request.confirm_existing_account,
+        "p_profile": profile_item,
+        "p_meals": [_guest_import_rpc_item(item) for item in request.meals],
+        "p_workouts": [_guest_import_rpc_item(item) for item in request.workouts],
+        "p_meal_plans": [_guest_import_rpc_item(item) for item in request.meal_plans],
+    }
+
+    try:
+        response = supabase.rpc("import_guest_data", rpc_params).execute()
+    except Exception as error:
+        if _guest_import_error_is_collision(error):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "GUEST_IMPORT_COLLISION",
+                    "message": "An imported item ID was reused with different content.",
+                },
+            ) from None
+        logger.error("Guest import database operation failed")
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "GUEST_IMPORT_FAILED",
+                "message": "Guest data could not be imported. No cleanup should be performed.",
+            },
+        ) from None
+
+    try:
+        return guest_import_response_adapter.validate_python(response.data)
+    except (AttributeError, TypeError, ValidationError):
+        logger.error("Guest import database returned an invalid response")
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "GUEST_IMPORT_INVALID_RESPONSE",
+                "message": "Guest import did not return a usable result.",
+            },
+        ) from None
 
 
 def normalize_planning_targets(
