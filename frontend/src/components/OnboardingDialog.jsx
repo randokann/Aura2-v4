@@ -65,7 +65,7 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                             }`}
                         >
                             <span className="text-2xl">{flag}</span>
-                            <span className="break-words text-center font-display text-sm leading-tight">{name}</span>
+                            <span className="font-display text-sm">{name}</span>
                         </button>
                     ))}
                 </div>

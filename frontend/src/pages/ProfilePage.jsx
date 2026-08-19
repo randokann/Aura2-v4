@@ -191,14 +191,14 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             key={code}
                             data-testid={`lang-${code}`}
                             onClick={() => setLang(code)}
-                            className={`btn-tactile min-h-[4.75rem] px-1 py-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 ${
+                            className={`btn-tactile py-2.5 rounded-2xl flex flex-col items-center gap-0.5 ${
                                 lang === code
                                     ? "bg-[color:var(--action-primary)] text-[color:var(--bg-default)]"
                                     : "bg-[color:var(--bg-elevated)] text-[color:var(--text-primary)]"
                             }`}
                         >
                             <span className="text-lg leading-none">{flag}</span>
-                            <span className="break-words text-center text-[9px] font-medium leading-tight">{name}</span>
+                            <span className="text-[9px] tracking-overline uppercase font-medium">{name}</span>
                         </button>
                     ))}
                 </div>
