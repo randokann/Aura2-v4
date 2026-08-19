@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
     Save,
@@ -10,6 +10,7 @@ import {
     CheckCircle2,
     Cloud,
     Loader2,
+    LogOut,
     Mail,
 } from "lucide-react";
 import { saveProfile } from "../lib/api";
@@ -105,6 +106,8 @@ export const ProfilePage = ({ profile, onUpdated }) => {
         goal: profile?.goal || "mantenere",
     });
     const [saving, setSaving] = useState(false);
+    const [signingOut, setSigningOut] = useState(false);
+    const signOutInFlight = useRef(false);
     const [googleSigningIn, setGoogleSigningIn] = useState(false);
     const [emailAuthOpen, setEmailAuthOpen] = useState(false);
     const guestMode = !user && isGuestMode();
@@ -151,6 +154,21 @@ export const ProfilePage = ({ profile, onUpdated }) => {
             onUpdated?.(u);
         } catch { toast.error("Error"); }
         finally { setSaving(false); }
+    };
+
+    const signOut = async () => {
+        if (signOutInFlight.current) return;
+        signOutInFlight.current = true;
+        setSigningOut(true);
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+        } catch {
+            toast.error("Couldn't sign out. Please try again.");
+        } finally {
+            signOutInFlight.current = false;
+            setSigningOut(false);
+        }
     };
 
     return (
@@ -289,6 +307,18 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             {guestMigration.status === "importing" ? "Importing…" : "Import device data"}
                         </button>
                     ) : null}
+                    <button
+                        type="button"
+                        data-testid="profile-sign-out"
+                        disabled={signingOut}
+                        onClick={signOut}
+                        className="btn-tactile mt-3 flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-medium text-[color:var(--text-secondary)] disabled:opacity-60"
+                    >
+                        {signingOut
+                            ? <Loader2 size={16} className="animate-spin" />
+                            : <LogOut size={16} />}
+                        {signingOut ? "Signing out…" : "Sign out"}
+                    </button>
                 </section>
             )}
 

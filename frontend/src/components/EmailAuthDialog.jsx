@@ -67,7 +67,7 @@ export function EmailAuthDialog({
                     </DialogTitle>
                     <DialogDescription className="pt-1 text-sm leading-relaxed text-[color:var(--text-secondary)]">
                         {sentTo
-                            ? `We sent a secure Aura2 sign-in link to ${sentTo}. Open it to continue.`
+                            ? `We sent a secure Flaro sign-in link to ${sentTo}. Open it to continue.`
                             : "Enter your email and we'll send you a secure magic link. No password needed."}
                     </DialogDescription>
                 </DialogHeader>

@@ -1,6 +1,7 @@
 import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { toast } from "sonner";
 
 import { useAuth } from "../auth/AuthProvider";
 import { useGuestMigration } from "../guestMigration/GuestMigrationProvider";
@@ -36,6 +37,7 @@ jest.mock("../lib/supabase", () => ({
     supabase: {
         auth: {
             signInWithOAuth: jest.fn(),
+            signOut: jest.fn(),
         },
     },
 }));
@@ -120,6 +122,7 @@ describe("ProfilePage Account & Sync section", () => {
         getGuestProfile.mockReturnValue(PROFILE);
         saveGuestProfile.mockReturnValue(true);
         supabase.auth.signInWithOAuth.mockResolvedValue({ error: null });
+        supabase.auth.signOut.mockResolvedValue({ error: null });
     });
 
     afterEach(() => {
@@ -139,6 +142,7 @@ describe("ProfilePage Account & Sync section", () => {
         expect(accountSection).not.toBeNull();
         expect(accountSection.textContent).toContain("Save & sync your progress");
         expect(accountSection.textContent).toContain("Flaro account");
+        expect(document.querySelector('[data-testid="profile-sign-out"]')).toBeNull();
         expect(bmiCard.compareDocumentPosition(accountSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(accountSection.compareDocumentPosition(nameInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
@@ -212,6 +216,46 @@ describe("ProfilePage Account & Sync section", () => {
         expect(requestDeviceImport).toHaveBeenCalledTimes(1);
         expect(document.querySelector('[data-testid="profile-account-google"]')).toBeNull();
         expect(document.querySelector('[data-testid="profile-account-email"]')).toBeNull();
+    });
+
+    test("signs out without deleting server-independent device or guest data", async () => {
+        useAuth.mockReturnValue({
+            user: { id: "user-1", email: "person@example.com" },
+        });
+        const preserved = {
+            aura2_guest_profile: JSON.stringify(PROFILE),
+            aura2_guest_meals: JSON.stringify([{ id: "meal-1" }]),
+            aura2_guest_workouts: JSON.stringify([{ id: "workout-1" }]),
+            aura2_guest_meal_plans: JSON.stringify([{ id: "plan-1" }]),
+            aura2_guest_mode: "true",
+            aura2_last_summary: "summary",
+            aura2_last_added_meal: "meal",
+            nutrisnap_device_id: "22222222-2222-4222-8222-222222222222",
+            nutrisnap_lang: "en",
+            guest_quota_history: "keep",
+        };
+        Object.entries(preserved).forEach(([key, value]) => localStorage.setItem(key, value));
+
+        await renderProfile();
+        await click("profile-sign-out");
+
+        expect(supabase.auth.signOut).toHaveBeenCalledTimes(1);
+        Object.entries(preserved).forEach(([key, value]) => {
+            expect(localStorage.getItem(key)).toBe(value);
+        });
+    });
+
+    test("keeps Sign out retryable when Supabase returns an error", async () => {
+        useAuth.mockReturnValue({
+            user: { id: "user-1", email: "person@example.com" },
+        });
+        supabase.auth.signOut.mockResolvedValueOnce({ error: new Error("unavailable") });
+
+        await renderProfile();
+        await click("profile-sign-out");
+
+        expect(toast.error).toHaveBeenCalledWith("Couldn't sign out. Please try again.");
+        expect(document.querySelector('[data-testid="profile-sign-out"]').disabled).toBe(false);
     });
 
     test("keeps guest profile editing and saving behavior unchanged", async () => {

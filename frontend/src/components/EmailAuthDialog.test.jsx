@@ -64,6 +64,8 @@ describe("EmailAuthDialog", () => {
 
         await act(async () => finishRequest("user@example.com"));
         expect(document.body.textContent).toContain("Check your email");
+        expect(document.body.textContent).toContain("secure Flaro sign-in link");
+        expect(document.body.textContent).not.toContain("Aura2");
         expect(document.querySelector('[data-testid="email-auth-resend"]')).not.toBeNull();
     });
 });

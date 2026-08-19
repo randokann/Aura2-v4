@@ -1,0 +1,9 @@
+{
+  "short_name": "Flaro",
+  "name": "Flaro",
+  "description": "Track meals, workouts, profile goals and meal plans with Flaro.",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#121A16",
+  "background_color": "#121A16"
+}

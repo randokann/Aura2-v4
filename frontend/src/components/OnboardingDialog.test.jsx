@@ -52,6 +52,8 @@ describe("OnboardingDialog authentication step", () => {
         await act(async () => root.render(<OnboardingDialog onSubmit={onSubmit} />));
         await reachFinalStep();
 
+        expect(document.body.textContent).toContain("Flaro account");
+        expect(document.body.textContent).not.toContain("Aura account");
         expect(document.querySelector('[data-testid="onb-google"]')).not.toBeNull();
         await click("onb-google");
         await click("onb-continue");

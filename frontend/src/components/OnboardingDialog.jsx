@@ -172,7 +172,7 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
             ) : (
                 <div className="space-y-4">
                     <div className="text-sm text-[color:var(--text-secondary)]">
-                        {"Create an Aura account to keep your data safe and available across devices. You can sign up with Google or use Email to create credentials."}
+                        Create or sign in to a Flaro account to keep your progress available across devices.
                     </div>
                     {/* Selectable option cards matching Activity/Goal style */}
                     <div className="space-y-2 mt-2">
@@ -202,7 +202,7 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                         >
                             <div className="font-medium">Continue with Email</div>
                             <div className={`text-xs ${accountMethod === 'email' ? 'opacity-80' : 'text-[color:var(--text-secondary)]'}`}>
-                                Create credentials and receive a magic link.
+                                Sign in with a secure email magic link.
                             </div>
                         </button>
 
@@ -227,7 +227,7 @@ export const OnboardingDialog = ({ onSubmit, authenticated = false }) => {
                         open={showEmailModal}
                         onOpenChange={setShowEmailModal}
                         beforeRequest={persistEmailOnboarding}
-                        title="Sign up with Email"
+                        title="Continue with Email"
                     />
                 </div>
             ),

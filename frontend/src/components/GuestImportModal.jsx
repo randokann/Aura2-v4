@@ -46,8 +46,8 @@ export function GuestImportModal({
                         {importing
                             ? "Keep Flaro open while your saved data is added to your account."
                             : failed
-                                ? "Your account is connected and your device data is still safe. You can retry now or continue and import it later."
-                                : "This Flaro account already contains saved data. Your existing account data will not be replaced. You can add the meals, workouts and saved meal plans stored on this device."}
+                                ? "Your account is connected and your device data is still safe. Retry now or import it later from Profile."
+                                : "This Flaro account already has saved data. Its profile and saved data will stay unchanged. Add the meals, workouts and saved plans from this device?"}
                     </DialogDescription>
                 </DialogHeader>
 

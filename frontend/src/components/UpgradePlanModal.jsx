@@ -25,10 +25,10 @@ const FREE_FEATURES = [
     "No cross-device sync",
 ];
 
-const PRO_PLACEHOLDERS = [
-    "Expanded AI access — details to be defined",
-    "Additional planning features — details to be defined",
-    "Pricing and availability — not yet defined",
+const PRO_NOTES = [
+    "Flaro Pro is reserved for future updates",
+    "Features and availability have not been announced",
+    "No paid plan is active",
 ];
 
 function FeatureList({ items }) {
@@ -84,8 +84,8 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                     </DialogTitle>
                     <DialogDescription className="pt-1 text-sm leading-relaxed text-[color:var(--text-secondary)]">
                         {pantryContext
-                            ? "Your guest pantry scan has been used. Create an account to move to account-based access and keep your Aura2 data in sync."
-                            : "Your free guest AI generations have been used. Create an account to move to account-based access and sync your Aura2 data."}
+                            ? "Your guest pantry scan has been used. Create or sign in to a Flaro account to move to account-based access and sync your data."
+                            : "Your free guest AI generations have been used. Create or sign in to a Flaro account to move to account-based access and sync your data."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -119,13 +119,13 @@ export function UpgradePlanModal({ open, onOpenChange, context = "meal-plan" }) 
                                 Reserved
                             </span>
                         </div>
-                        <FeatureList items={PRO_PLACEHOLDERS} />
+                        <FeatureList items={PRO_NOTES} />
                     </section>
                 </div>
 
                 <div className="space-y-2 pt-2 text-center">
                     <p className="text-xs text-[color:var(--text-secondary)]">
-                        Create an Aura2 account with Google or Email to continue. No paid plan is activated.
+                        Continue with Google or Email to use your Flaro account. No paid plan is activated.
                     </p>
                     <button
                         data-testid="upgrade-google-cta"

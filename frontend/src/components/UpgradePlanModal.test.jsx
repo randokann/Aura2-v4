@@ -37,6 +37,9 @@ describe("UpgradePlanModal email authentication", () => {
     test("the enabled Email CTA opens the shared email-auth dialog", async () => {
         await act(async () => root.render(<Harness />));
 
+        expect(document.body.textContent).toContain("Flaro account");
+        expect(document.body.textContent).not.toMatch(/Aura2|details to be defined|not yet defined/);
+
         const emailCta = document.querySelector('[data-testid="upgrade-email-cta"]');
         expect(emailCta).not.toBeNull();
         expect(emailCta.disabled).toBe(false);

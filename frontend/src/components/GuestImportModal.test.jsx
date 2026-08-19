@@ -47,7 +47,7 @@ describe("GuestImportModal", () => {
         });
 
         expect(document.body.textContent).toContain("Import data from this device?");
-        expect(document.body.textContent).toContain("will not be replaced");
+        expect(document.body.textContent).toContain("profile and saved data will stay unchanged");
         const countCards = document.querySelectorAll('[data-testid="guest-import-counts"] > div');
         expect(Array.from(countCards).map((card) => card.firstChild.textContent))
             .toEqual(["2", "3", "4"]);
