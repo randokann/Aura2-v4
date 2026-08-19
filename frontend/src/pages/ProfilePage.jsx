@@ -12,10 +12,11 @@ import {
     Loader2,
     Mail,
 } from "lucide-react";
-import { saveProfile, getDeviceId } from "../lib/api";
+import { saveProfile } from "../lib/api";
 import { isGuestMode, getGuestProfile, saveGuestProfile } from "../lib/guestStorage";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/AuthProvider";
+import { useGuestMigration } from "../guestMigration/GuestMigrationProvider";
 import { useLang } from "../i18n/LangContext";
 import { LANGUAGES } from "../i18n/languages";
 import { EmailAuthDialog } from "../components/EmailAuthDialog";
@@ -92,6 +93,7 @@ function roundTo(value, decimals) {
 export const ProfilePage = ({ profile, onUpdated }) => {
     const { t, lang, setLang } = useLang();
     const { user } = useAuth();
+    const guestMigration = useGuestMigration();
     const [form, setForm] = useState({
         name: profile?.name || "",
         age: profile?.age || 30,
@@ -144,7 +146,7 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                 return;
             }
 
-            const u = await saveProfile({ device_id: getDeviceId(), ...form });
+            const u = await saveProfile(form);
             toast.success(t("profile.updated"));
             onUpdated?.(u);
         } catch { toast.error("Error"); }
@@ -260,15 +262,33 @@ export const ProfilePage = ({ profile, onUpdated }) => {
                             </div>
                             <h2 className="font-display text-xl font-semibold mt-1">Account connected</h2>
                             <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mt-2">
-                                You're signed in to Flaro on this device.
+                                {guestMigration.hasImportableData
+                                    ? "Data from this device is available to import."
+                                    : "Your Flaro data is synced to your account."}
                             </p>
                             {user.email && (
                                 <p data-testid="profile-account-email-address" className="text-sm font-medium mt-2 truncate">
                                     {user.email}
                                 </p>
                             )}
+                            {guestMigration.profileNeedsReconciliation ? (
+                                <p className="mt-3 text-xs leading-relaxed text-[color:var(--text-secondary)]">
+                                    Your account profile was kept unchanged. The guest profile is still stored on this device.
+                                </p>
+                            ) : null}
                         </div>
                     </div>
+                    {guestMigration.hasImportableData ? (
+                        <button
+                            type="button"
+                            data-testid="profile-import-device-data"
+                            disabled={guestMigration.status === "importing"}
+                            onClick={guestMigration.requestDeviceImport}
+                            className="btn-tactile mt-5 w-full rounded-full bg-[color:var(--bg-elevated)] px-5 py-3.5 font-semibold text-[color:var(--text-primary)] disabled:opacity-60"
+                        >
+                            {guestMigration.status === "importing" ? "Importing…" : "Import device data"}
+                        </button>
+                    ) : null}
                 </section>
             )}
 

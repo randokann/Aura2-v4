@@ -12,8 +12,9 @@ import { MealPlanPage } from "@/pages/MealPlanPage";
 import { CoachPage } from "@/pages/CoachPage";
 import { EmailAuthCallback } from "@/pages/EmailAuthCallback";
 import { LangProvider, useLang } from "@/i18n/LangContext";
+import { useGuestMigration } from "@/guestMigration/GuestMigrationProvider";
 import { sectionStyle } from "@/lib/sectionColors";
-import { getDeviceId, getProfile, saveProfile, associateDevice } from "@/lib/api";
+import { getDeviceId, getProfile, saveProfile } from "@/lib/api";
 import { getGuestProfile, saveGuestProfile } from "@/lib/guestStorage";
 import {
     clearPendingOnboarding,
@@ -83,7 +84,7 @@ function ensureGuestProfileGoals(p) {
 function Shell() {
     const { t } = useLang();
     const { user, loading: authLoading, authError, clearAuthError } = useAuth();
-    console.log("AUTH USER:", user);
+    const guestMigration = useGuestMigration();
     const [tab, setTab] = useState("diario");
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -136,20 +137,34 @@ function Shell() {
                 return;
             }
 
+            if (!guestMigration.settled) {
+                setLoading(true);
+                return;
+            }
+
             setLoading(true);
             const userId = user.id;
             let operation = profileSyncInFlightRef.current;
 
-            if (!operation || operation.userId !== userId) {
+            if (
+                !operation
+                || operation.userId !== userId
+                || operation.migrationRevision !== guestMigration.revision
+            ) {
                 const pending = readPendingOnboarding();
                 const promise = synchronizeAuthenticatedOnboarding({
                     userId,
                     readPending: () => readPendingOnboarding(),
-                    loadExistingProfile: () => getProfile(getDeviceId()),
+                    loadExistingProfile: () => getProfile("authenticated"),
                     saveNewProfile: (pendingForm) => saveProfile({ ...pendingForm }),
                     clearPending: () => clearPendingOnboarding(),
                 });
-                operation = { userId, promise, hasPending: Boolean(pending) };
+                operation = {
+                    userId,
+                    promise,
+                    hasPending: Boolean(pending),
+                    migrationRevision: guestMigration.revision,
+                };
                 profileSyncInFlightRef.current = operation;
             }
 
@@ -181,7 +196,14 @@ function Shell() {
         return () => {
             active = false;
         };
-    }, [authLoading, profileSyncAttempt, restoreGuestProfile, user]);
+    }, [
+        authLoading,
+        guestMigration.revision,
+        guestMigration.settled,
+        profileSyncAttempt,
+        restoreGuestProfile,
+        user,
+    ]);
 
     useEffect(() => {
         if (!authError) return;
@@ -189,21 +211,6 @@ function Shell() {
         clearAuthError();
     }, [authError, clearAuthError]);
 
-    useEffect(() => {
-    async function migrateDeviceData() {
-        if (!user) return;
-
-        try {
-            await associateDevice(getDeviceId());
-            console.log("Device data associated successfully");
-        } catch (e) {
-            console.error("Device association failed:", e);
-        }
-    }
-
-    migrateDeviceData();
-}, [user]);
-    
     // When finishing onboarding: if already authenticated, save immediately.
     // Otherwise persist the form and start OAuth sign-in; the pending form will be
     // completed after the auth listener detects a session.
@@ -299,17 +306,6 @@ function Shell() {
 
     return (
         <div className="App" style={sectionStyle(tab)}>
-
-<button
-    onClick={() =>
-        supabase.auth.signInWithOAuth({
-            provider: "google",
-        })
-    }
->
-    Login Google Test
-</button>
-
             <Toaster
                 position="top-center"
                 theme="dark"

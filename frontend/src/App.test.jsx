@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { useAuth } from "./auth/AuthProvider";
+import { useGuestMigration } from "./guestMigration/GuestMigrationProvider";
 import { saveProfile } from "./lib/api";
 import { supabase } from "./lib/supabase";
 import {
@@ -13,6 +14,10 @@ import {
 
 jest.mock("./auth/AuthProvider", () => ({
     useAuth: jest.fn(),
+}));
+
+jest.mock("./guestMigration/GuestMigrationProvider", () => ({
+    useGuestMigration: jest.fn(),
 }));
 
 jest.mock("./lib/supabase", () => ({
@@ -47,6 +52,9 @@ jest.mock("@/App.css", () => ({}), { virtual: true });
 jest.mock("@/lib/api", () => jest.requireMock("./lib/api"), { virtual: true });
 jest.mock("@/lib/guestStorage", () => jest.requireMock("./lib/guestStorage"), { virtual: true });
 jest.mock("@/lib/pendingOnboarding", () => jest.requireMock("./lib/pendingOnboarding"), { virtual: true });
+jest.mock("@/guestMigration/GuestMigrationProvider", () => (
+    jest.requireMock("./guestMigration/GuestMigrationProvider")
+), { virtual: true });
 
 jest.mock("@/i18n/LangContext", () => ({
     LangProvider: ({ children }) => children,
@@ -105,6 +113,11 @@ describe("App authentication routing", () => {
             loading: false,
             authError: null,
             clearAuthError: jest.fn(),
+        });
+        useGuestMigration.mockReturnValue({
+            settled: true,
+            revision: 0,
+            requiresDecision: false,
         });
         supabase.auth.signInWithOAuth.mockResolvedValue({ error: null });
     });
@@ -177,5 +190,41 @@ describe("App authentication routing", () => {
         }));
         expect(savePendingOnboarding).not.toHaveBeenCalled();
         expect(supabase.auth.signInWithOAuth).not.toHaveBeenCalled();
+    });
+
+    test("waits for automatic guest import before authenticated profile resolution", async () => {
+        useAuth.mockReturnValue({
+            user: { id: "guest-upgrade", email: "guest@example.com" },
+            loading: false,
+            authError: null,
+            clearAuthError: jest.fn(),
+        });
+        useGuestMigration.mockReturnValue({
+            settled: false,
+            revision: 0,
+            requiresDecision: false,
+        });
+        synchronizeAuthenticatedOnboarding.mockResolvedValue({
+            status: "existing",
+            profile: { user_id: "guest-upgrade", name: "Imported Guest" },
+        });
+
+        await act(async () => {
+            root.render(<App />);
+        });
+        expect(synchronizeAuthenticatedOnboarding).not.toHaveBeenCalled();
+        expect(document.querySelector('[data-testid="mock-onboarding"]')).toBeNull();
+
+        useGuestMigration.mockReturnValue({
+            settled: true,
+            revision: 1,
+            requiresDecision: false,
+        });
+        await act(async () => {
+            root.render(<App />);
+        });
+
+        expect(synchronizeAuthenticatedOnboarding).toHaveBeenCalledTimes(1);
+        expect(document.querySelector('[data-testid="mock-onboarding"]')).toBeNull();
     });
 });

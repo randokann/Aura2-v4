@@ -2,7 +2,8 @@ import { AlertTriangle, CheckCircle2, LoaderCircle, Sparkles, X } from "lucide-r
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthProvider";
-import { getDeviceId, getProfile, saveProfile } from "../lib/api";
+import { useGuestMigration } from "../guestMigration/GuestMigrationProvider";
+import { getProfile, saveProfile } from "../lib/api";
 import { API_ERROR_KIND, classifyApiError } from "../lib/apiErrors";
 import {
     clearPendingOnboarding,
@@ -67,6 +68,7 @@ export function EmailAuthCallback({
         authError,
         clearAuthError,
     } = useAuth();
+    const guestMigration = useGuestMigration();
     const [attempt, setAttempt] = useState(0);
     const [view, setView] = useState({ status: "confirming", message: "" });
     const operationRef = useRef(null);
@@ -99,6 +101,11 @@ export function EmailAuthCallback({
             return undefined;
         }
 
+        if (!guestMigration.settled) {
+            setView({ status: "completing", message: "" });
+            return undefined;
+        }
+
         let active = true;
         const operationKey = `${user.id}:${attempt}`;
         let operation = operationRef.current;
@@ -108,7 +115,7 @@ export function EmailAuthCallback({
                 promise: synchronizeAuthenticatedOnboarding({
                     userId: user.id,
                     readPending: () => readPendingOnboarding(),
-                    loadExistingProfile: () => getProfile(getDeviceId()),
+                    loadExistingProfile: () => getProfile("authenticated"),
                     saveNewProfile: (pendingForm) => saveProfile({ ...pendingForm }),
                     clearPending: () => clearPendingOnboarding(),
                 }),
@@ -131,13 +138,17 @@ export function EmailAuthCallback({
         return () => {
             active = false;
         };
-    }, [attempt, authError, loading, user]);
+    }, [attempt, authError, guestMigration.settled, loading, user]);
 
     useEffect(() => {
-        if (view.status !== "success" || autoContinueDelay == null) return undefined;
+        if (
+            view.status !== "success"
+            || guestMigration.requiresDecision
+            || autoContinueDelay == null
+        ) return undefined;
         const timeoutId = window.setTimeout(onContinue, autoContinueDelay);
         return () => window.clearTimeout(timeoutId);
-    }, [autoContinueDelay, onContinue, view.status]);
+    }, [autoContinueDelay, guestMigration.requiresDecision, onContinue, view.status]);
 
     const returnToSignIn = () => {
         clearAuthError?.();

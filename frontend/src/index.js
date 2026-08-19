@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@/index.css";
 import App from "@/App";
 import { AuthProvider } from "@/auth/AuthProvider";
+import { GuestMigrationProvider } from "@/guestMigration/GuestMigrationProvider";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,7 +20,9 @@ root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <App />
+        <GuestMigrationProvider>
+          <App />
+        </GuestMigrationProvider>
       </AuthProvider>
     </QueryClientProvider>
   </React.StrictMode>,

@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 import { useAuth } from "../auth/AuthProvider";
+import { useGuestMigration } from "../guestMigration/GuestMigrationProvider";
 import { saveProfile } from "../lib/api";
 import {
     getGuestProfile,
@@ -14,6 +15,10 @@ import { ProfilePage } from "./ProfilePage";
 
 jest.mock("../auth/AuthProvider", () => ({
     useAuth: jest.fn(),
+}));
+
+jest.mock("../guestMigration/GuestMigrationProvider", () => ({
+    useGuestMigration: jest.fn(),
 }));
 
 jest.mock("../lib/api", () => ({
@@ -105,6 +110,12 @@ describe("ProfilePage Account & Sync section", () => {
         localStorage.clear();
 
         useAuth.mockReturnValue({ user: null });
+        useGuestMigration.mockReturnValue({
+            status: "idle",
+            hasImportableData: false,
+            profileNeedsReconciliation: false,
+            requestDeviceImport: jest.fn(),
+        });
         isGuestMode.mockReturnValue(true);
         getGuestProfile.mockReturnValue(PROFILE);
         saveGuestProfile.mockReturnValue(true);
@@ -177,6 +188,28 @@ describe("ProfilePage Account & Sync section", () => {
         const accountSection = document.querySelector('[data-testid="profile-account-section"]');
         expect(accountSection.textContent).toContain("Account connected");
         expect(accountSection.textContent).toContain("person@example.com");
+        expect(document.querySelector('[data-testid="profile-account-google"]')).toBeNull();
+        expect(document.querySelector('[data-testid="profile-account-email"]')).toBeNull();
+    });
+
+    test("offers the shared recovery action when authenticated device data remains", async () => {
+        const requestDeviceImport = jest.fn();
+        useAuth.mockReturnValue({
+            user: { id: "user-1", email: "person@example.com" },
+        });
+        useGuestMigration.mockReturnValue({
+            status: "deferred",
+            hasImportableData: true,
+            profileNeedsReconciliation: false,
+            requestDeviceImport,
+        });
+
+        await renderProfile();
+
+        const accountSection = document.querySelector('[data-testid="profile-account-section"]');
+        expect(accountSection.textContent).toContain("Data from this device is available to import");
+        await click("profile-import-device-data");
+        expect(requestDeviceImport).toHaveBeenCalledTimes(1);
         expect(document.querySelector('[data-testid="profile-account-google"]')).toBeNull();
         expect(document.querySelector('[data-testid="profile-account-email"]')).toBeNull();
     });

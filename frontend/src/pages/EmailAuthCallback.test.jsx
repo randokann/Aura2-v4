@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 import { useAuth } from "../auth/AuthProvider";
-import { getDeviceId, getProfile, saveProfile } from "../lib/api";
+import { useGuestMigration } from "../guestMigration/GuestMigrationProvider";
+import { getProfile, saveProfile } from "../lib/api";
 import {
     PENDING_ONBOARDING_KEY,
     readPendingOnboarding,
@@ -15,8 +16,11 @@ jest.mock("../auth/AuthProvider", () => ({
     useAuth: jest.fn(),
 }));
 
+jest.mock("../guestMigration/GuestMigrationProvider", () => ({
+    useGuestMigration: jest.fn(),
+}));
+
 jest.mock("../lib/api", () => ({
-    getDeviceId: jest.fn(),
     getProfile: jest.fn(),
     saveProfile: jest.fn(),
 }));
@@ -37,6 +41,7 @@ describe("EmailAuthCallback", () => {
     let container;
     let root;
     let callbacks;
+    let migrationState;
 
     async function renderCallback(autoContinueDelay = null) {
         await act(async () => {
@@ -79,7 +84,8 @@ describe("EmailAuthCallback", () => {
             clearAuthError: jest.fn(),
         };
         useAuth.mockImplementation(() => authState);
-        getDeviceId.mockReturnValue("device-1");
+        migrationState = { settled: true, requiresDecision: false };
+        useGuestMigration.mockImplementation(() => migrationState);
     });
 
     afterEach(() => {
@@ -106,8 +112,7 @@ describe("EmailAuthCallback", () => {
         };
         await renderCallback();
 
-        expect(getDeviceId).toHaveBeenCalledTimes(1);
-        expect(getProfile).toHaveBeenCalledWith("device-1");
+        expect(getProfile).toHaveBeenCalledWith("authenticated");
         expect(saveProfile).toHaveBeenCalledTimes(1);
         expect(saveProfile).toHaveBeenCalledWith(FORM);
         expect(readPendingOnboarding()).toBeNull();
@@ -168,6 +173,48 @@ describe("EmailAuthCallback", () => {
         expect(document.body.textContent).toContain("there's no need to verify your email again");
         expect(document.querySelector('[data-testid="email-callback-setup"]')).not.toBeNull();
         expect(authState.clearAuthError).not.toHaveBeenCalled();
+    });
+
+    test("same-browser callback waits for guest migration before resolving the imported profile", async () => {
+        authState = {
+            ...authState,
+            loading: false,
+            user: { id: "migrating-user", email: "migrating@example.com" },
+        };
+        migrationState = { settled: false, requiresDecision: false };
+        getProfile.mockResolvedValue({ user_id: "migrating-user", name: "Imported Guest" });
+
+        await renderCallback();
+
+        expect(getProfile).not.toHaveBeenCalled();
+        expect(document.body.textContent).toContain("Confirming your email");
+
+        migrationState = { settled: true, requiresDecision: false };
+        await renderCallback();
+
+        expect(getProfile).toHaveBeenCalledWith("authenticated");
+        expect(saveProfile).not.toHaveBeenCalled();
+        expect(document.querySelector('[data-testid="email-callback-continue"]')).not.toBeNull();
+    });
+
+    test("existing-account confirmation pauses automatic callback continuation", async () => {
+        jest.useFakeTimers();
+        authState = {
+            ...authState,
+            loading: false,
+            user: { id: "existing-user", email: "existing@example.com" },
+        };
+        migrationState = { settled: true, requiresDecision: true };
+        getProfile.mockResolvedValue({ user_id: "existing-user", name: "Existing" });
+
+        await renderCallback(900);
+        act(() => jest.advanceTimersByTime(900));
+
+        expect(callbacks.onContinue).not.toHaveBeenCalled();
+        migrationState = { settled: true, requiresDecision: false };
+        await renderCallback(900);
+        act(() => jest.advanceTimersByTime(900));
+        expect(callbacks.onContinue).toHaveBeenCalledTimes(1);
     });
 
     test("profile-save failure retains pending onboarding and succeeds on retry", async () => {

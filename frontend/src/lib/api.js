@@ -42,6 +42,7 @@ export const api = axios.create({ baseURL: API });
 api.interceptors.request.use(async (config) => {
     config.auraOnlineAtRequest = typeof navigator === "undefined" ? undefined : navigator.onLine;
     const lang = localStorage.getItem("nutrisnap_lang") || "en";
+    const isGuestImportRequest = config.url?.includes("/guest-import");
     config.headers = config.headers || {};
     config.headers["X-Lang"] = lang;
 
@@ -52,9 +53,14 @@ api.interceptors.request.use(async (config) => {
 
         const token = session?.access_token;
 
+        if (config.expectedUserId && session?.user?.id !== config.expectedUserId) {
+            const error = new Error("The authenticated user changed before guest import.");
+            error.code = "AUTH_USER_CHANGED";
+            throw error;
+        }
+
         if (token) {
-    console.log("SENDING AUTH TOKEN:", token.substring(0, 30) + "...");
-    config.headers["Authorization"] = `Bearer ${token}`;
+            config.headers["Authorization"] = `Bearer ${token}`;
 
             const isAssociateRequest = config.url?.includes("/auth/associate");
 
@@ -73,10 +79,12 @@ api.interceptors.request.use(async (config) => {
             }
         }
     } catch (e) {
-        // Ignore auth errors
+        if (e?.code === "AUTH_USER_CHANGED") throw e;
+        // Ordinary session lookup failures are handled by the backend authentication check.
     }
 
     if (
+        !isGuestImportRequest &&
         config.data &&
         typeof config.data === "object" &&
         !(config.data instanceof FormData)
@@ -112,6 +120,11 @@ export async function clarifyFoodAnalysis(payload) {
 
 export async function saveProfile(payload) {
     const { data } = await api.post("/profile", payload);
+    return data;
+}
+
+export async function importGuestData(payload, { expectedUserId } = {}) {
+    const { data } = await api.post("/guest-import", payload, { expectedUserId });
     return data;
 }
 
