@@ -1,0 +1,8 @@
+{
+  "appId": "com.flaro.app",
+  "appName": "Flaro",
+  "webDir": "build",
+  "server": {
+    "cleartext": false
+  }
+}
